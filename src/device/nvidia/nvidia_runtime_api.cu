@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cuda_runtime.h>
 
 namespace llaisys::device::nvidia {
 
@@ -46,7 +47,14 @@ void freeHost(void *ptr) {
 }
 
 void memcpySync(void *dst, const void *src, size_t size, llaisysMemcpyKind_t kind) {
-    TO_BE_IMPLEMENTED();
+    cudaError_t err = cudaMemcpy(dst,
+                                 src,
+                                 size,
+                                 static_cast<cudaMemcpyKind>(kind));
+    if (err != cudaSuccess) {
+        throw std::runtime_error(std::string("cudaMemcpy failed: ") +
+                                 cudaGetErrorString(err));
+    }
 }
 
 void memcpyAsync(void *dst, const void *src, size_t size, llaisysMemcpyKind_t kind) {
