@@ -10,7 +10,7 @@ def test_tensor():
     llaisys_tensor = llaisys.Tensor(
         (3, 4, 5), dtype=llaisys_dtype("i64"), device=llaisys_device("cpu")
     )
-
+    
     # Test load
     print("===Test load===")
     llaisys_tensor.load(torch_tensor.data_ptr())
