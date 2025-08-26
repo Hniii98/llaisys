@@ -164,7 +164,7 @@ void Tensor::debug() const {
 }
 
 bool Tensor::isContiguous() const {
-    size_t ndim_ = this->ndim();
+    int ndim_ = static_cast<int>(this->ndim());
 
     if (ndim_ == 0) return true;  // empty 
     
@@ -208,7 +208,7 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {
     CHECK_SAME(EXCEPTION_SHAPE_MISMATCH, expected_numel, view_numel); // check 
 
     // reconstruct meta information
-    size_t view_ndim = shape.size(); 
+    int view_ndim = static_cast<int>(shape.size()); 
     std::vector<ptrdiff_t> strides(view_ndim);
     size_t stride = 1;
     for (int i = view_ndim - 1; i >= 0; --i) {
