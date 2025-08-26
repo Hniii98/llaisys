@@ -3,5 +3,5 @@
 #include "../../tensor/tensor.hpp"
 
 namespace llaisys::ops {
-void rearrange(tensor_t out, tensor_t in);
+	void rearrange(tensor_t out, tensor_t in);
 }
