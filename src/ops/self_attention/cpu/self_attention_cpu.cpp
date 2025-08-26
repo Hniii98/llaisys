@@ -17,10 +17,7 @@ void self_attention_(T *atten_val, const T *q, const T *k, const T *v, float sca
            v：[total_len, nkvhead, dv]
        scale：1 / sqrt(d)
 */
-	 // 1. 函数入口打印（确认函数被调用）
-    printf("=== 进入self_attention_函数 ===\n");
-    printf("参数：seq_len=%ld, nhead=%ld, nkvhead=%ld, d=%ld, total_len=%ld, dv=%ld\n", 
-           seq_len, nhead, nkvhead, d, total_len, dv);
+	
 	std::vector<float> score(total_len);
 	std::vector<float> weight(total_len);
 
@@ -43,7 +40,6 @@ void self_attention_(T *atten_val, const T *q, const T *k, const T *v, float sca
 			size_t kv_head_idx = j * nkvhead / nhead;
 
 
-			printf("查询头%ld -> KV头%ld\n", j, kv_head_idx);
 			//  1. score = Q * K ^ T * scale	
 			float max_score = -std::numeric_limits<float>::infinity();
 			size_t max_k_idx = query_i + cache_len;	
