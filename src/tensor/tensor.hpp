@@ -2,6 +2,8 @@
 #include "../core/llaisys_core.hpp"
 
 #include <vector>
+#include <memory>
+
 namespace llaisys {
 class Tensor;
 using tensor_t = std::shared_ptr<Tensor>;
@@ -12,11 +14,11 @@ struct TensorMeta {
     std::vector<ptrdiff_t> strides;
 };
 
-class Tensor {
+class Tensor : public std::enable_shared_from_this<Tensor> {
 private:
     TensorMeta _meta;
     core::storage_t _storage;
-    size_t _offset;
+    size_t _offset; // units: byte
     Tensor(TensorMeta meta, core::storage_t storage, size_t offset = 0);
 
 public:
