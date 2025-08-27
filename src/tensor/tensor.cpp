@@ -1,6 +1,7 @@
 #include "tensor.hpp"
 
 #include "../utils.hpp"
+#include "../ops/rearrange/op.hpp"
 
 #include <cstring>
 #include <numeric>
@@ -28,6 +29,7 @@ tensor_t Tensor::create(const std::vector<size_t> &shape,
 
     if (device_type == LLAISYS_DEVICE_CPU && core::context().runtime().deviceType() != LLAISYS_DEVICE_CPU) {
         auto storage = core::context().runtime().allocateHostStorage(total_elems * dtype_size);
+        // may need custom deleter for storage, so can't use make_shared to build.
         return std::shared_ptr<Tensor>(new Tensor(meta, storage));
     } else {
         core::context().setDevice(device_type, device);
@@ -258,8 +260,22 @@ void Tensor::load(const void *src_) {
 }
 
 tensor_t Tensor::contiguous() const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    if(isContiguous()) {
+        // should transfer const Tensor* to Tensor* first.
+        // return a shared_ptr point to same meta and storage.
+        return std::const_pointer_cast<Tensor>(shared_from_this());
+    }
+
+    tensor_t new_tensor = create(_meta.shape, 
+                                 _meta.dtype, 
+                                 deviceType(),
+                                 deviceId());
+
+    llaisys::ops::rearrange(new_tensor, 
+                            std::const_pointer_cast<Tensor>(shared_from_this()));
+    
+    return new_tensor;
+        
 }
 
 tensor_t Tensor::reshape(const std::vector<size_t> &shape) const {
