@@ -37,6 +37,10 @@ __C {
 
     __export struct LlaisysQwen2Weights *llaisysQwen2ModelWeights(struct LlaisysQwen2Model * model);
 
-    __export int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model * model, int64_t * token_ids, size_t ntoken);
+    __export int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model * model, int64_t * token_ids, size_t ntoken); // prefill
+
+    __export int64_t llaisysQwen2ModelForwardOne(struct LlaisysQwen2Model *model, int64_t token_id); // decode
+
+    __export llaisysTensor_t llaisysQwen2ModelLogits(struct LlaisysQwen2Model *model);
 }
 #endif // LLAISYS_MODELS_QWEN2_H
