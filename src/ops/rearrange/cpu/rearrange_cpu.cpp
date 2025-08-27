@@ -4,7 +4,7 @@
 
 template <typename T>
 void rearrange_(T *out, const T *in, const std::vector<size_t> &in_shape, const std::vector<ptrdiff_t> &in_stride) {
-	size_t ndim = in_shape.size();
+	const size_t ndim = in_shape.size();
 	size_t nelmens = 1;
 	for(auto s: in_shape) nelmens *= s;
 
@@ -12,16 +12,17 @@ void rearrange_(T *out, const T *in, const std::vector<size_t> &in_shape, const 
 	
 	for(size_t i = 0; i < nelmens; i++) {
 		
-		size_t flat_offset = 0;
+		ptrdiff_t flat_offset = 0;
 		for(size_t d = 0; d < ndim; d++) {
-			flat_offset += in_stride[d] * in_shape[d];
+			flat_offset += index[d] * in_stride[d];
 		}
 
 		out[i] = in[flat_offset];
 
 		 // accumulate index array from right to left.
-		 for(int d = ndim - 1; d >= 0; d--) {
-			if(++index[d] < in_shape[d]) break;
+		 for(int d = static_cast<int>(ndim) - 1; d >= 0; d--) {
+			if(++index[d] < in_shape[d]) 
+				break;
 			index[d] = 0; // carry in.
 		 }
 
