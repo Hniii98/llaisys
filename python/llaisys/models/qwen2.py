@@ -31,3 +31,4 @@ class Qwen2:
         # TODO: Implement generate function
 
         return []
+
