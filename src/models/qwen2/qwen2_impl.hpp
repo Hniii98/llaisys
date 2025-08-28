@@ -12,6 +12,8 @@ namespace llaisys::models::qwen2 {
 struct Qwen2Impl {
     // ---- 模型元信息 ----
     LlaisysQwen2Meta    meta;
+    std::vector<int64_t> ctx_tokens_;
+
 
     // ---- 权重 ----
     // 注意：weights 里的 tensor 句柄由模型创建 & 销毁，不要在外部 delete
@@ -41,13 +43,14 @@ struct Qwen2Impl {
     LlaisysQwen2Weights* getWeights() { return &weights; }
 
     // ---- 推理接口 ----
+    int64_t forward(const int64_t* token_ids, size_t T); 
     int64_t prefill(const int64_t* token_ids, size_t ntoken);
     int64_t decode_one(int64_t token_id);
 
     // ---- Logits ----
     // C API 用：借用 shared_ptr（不转移所有权）
     llaisysTensor_t logits_tensor() {
-        return llaisys::borrow(last_logits_);
+        return llaisys::to_c_handle(last_logits_);
     }
 };
 
