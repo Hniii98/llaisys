@@ -83,12 +83,27 @@ void self_attention_(T *atten_val, const T *q, const T *k, const T *v, float sca
 			// 2. weight = casualsoftmax(score)
 
 			// sum up exp of score in current timestep
+			// float exp_sum = 0.0f;
+			// for (size_t score_i = 0; score_i <= max_k_idx; score_i++) {
+			// 	float e_i = std::exp(score[score_i] - max_score);
+			// 	weight[score_i] = e_i;
+			// 	exp_sum += e_i;
+			// }
 			float exp_sum = 0.0f;
+			if (max_k_idx >= total_len) max_k_idx = total_len - 1;
+
 			for (size_t score_i = 0; score_i <= max_k_idx; score_i++) {
 				float e_i = std::exp(score[score_i] - max_score);
+				if (std::isnan(e_i) || std::isinf(e_i)) e_i = 0.0f;
 				weight[score_i] = e_i;
 				exp_sum += e_i;
 			}
+
+			if (exp_sum <= 0.0f) {
+				std::fill(weight.begin(), weight.end(), 0.0f);
+				continue;
+			}
+
 			ASSERT(exp_sum > 0.0, "Sum of exponentials should be greater than zero.");
 
 			// do the softmax of score and store in weight vector

@@ -91,41 +91,55 @@ Qwen2Impl::~Qwen2Impl() {
     free_all_weights_and_tensors(weights, meta.nlayer);
 }
 
-// -------- Prefill：用现有算子搭一条最小前向（无 KV cache）--------
-int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
-    // 1) 基本权重检查
+int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
+     std::cerr << "[Prefill] start, T=" << T << std::endl;
+   
+
     if (!weights.in_embed || !weights.out_embed || !weights.out_norm_w) {
+        std::cerr << "[Prefill] ERROR: missing essential weights" << std::endl;
         return (T ? token_ids[T-1] : (meta.end_token >= 0 ? meta.end_token : 0));
     }
 
-    // ⭐ C 句柄 → 非拥有 shared_ptr
     auto in_embed  = llaisys::borrow(weights.in_embed);
     auto out_embed = llaisys::borrow(weights.out_embed);
     auto out_norm  = llaisys::borrow(weights.out_norm_w);
 
-    // 2) 维度/设备
+
     size_t V = safe_dim(in_embed, 0);
     size_t H = safe_dim(in_embed, 1);
+
     if (!V || !H) {
+        std::cerr << "[Prefill] ERROR: invalid in_embed dims" << std::endl;
         return (T ? token_ids[T-1] : (meta.end_token >= 0 ? meta.end_token : 0));
     }
+
+    // --- 检查 token 是否越界 ---
+    for (size_t i = 0; i < T; i++) {
+        if (token_ids[i] < 0 || token_ids[i] >= (int64_t)V) {
+            std::cerr << "[Prefill] ERROR: token_ids[" << i << "]=" << token_ids[i]
+                      << " out of range vocab=" << V << std::endl;
+            return (meta.end_token >= 0 ? meta.end_token : 0);
+        }
+    }
+
     auto dev_type = in_embed->deviceType();
     auto dev_id   = in_embed->deviceId();
 
-    // 3) indices -> embedding
+    // --- embedding lookup ---
     auto indices = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     indices->load(token_ids);
 
     auto x = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-    ops::embedding(x, indices, in_embed);
 
-    // 4) pos_ids
+   
+    // --- pos_ids ---
     auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     { std::vector<int64_t> p(T); for (size_t i=0;i<T;++i) p[i]=int64_t(i); pos_ids->load(p.data()); }
 
-    // 5) L 层 block
+    // --- Transformer blocks ---
     for (size_t l = 0; l < meta.nlayer; ++l) {
-        // 需要的权重句柄 -> 非拥有 shared_ptr
+        std::cerr << "[Prefill] ---- layer " << l << " ----" << std::endl;
+
         auto attn_norm = weights.attn_norm_w ? llaisys::borrow(weights.attn_norm_w[l]) : nullptr;
         auto q_w = weights.attn_q_w ? llaisys::borrow(weights.attn_q_w[l]) : nullptr;
         auto q_b = weights.attn_q_b ? llaisys::borrow(weights.attn_q_b[l]) : nullptr;
@@ -139,46 +153,70 @@ int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
         auto gate_w   = weights.mlp_gate_w ? llaisys::borrow(weights.mlp_gate_w[l]) : nullptr;
         auto up_w     = weights.mlp_up_w   ? llaisys::borrow(weights.mlp_up_w[l])   : nullptr;
         auto down_w   = weights.mlp_down_w ? llaisys::borrow(weights.mlp_down_w[l]) : nullptr;
-
+        
         if (!attn_norm || !q_w || !k_w || !v_w || !o_w || !mlp_norm || !gate_w || !up_w || !down_w) {
-            break; // 本层权重不全：跳过后续层
+            std::cerr << "[Prefill] missing weight(s) in layer " << l << ", stop" << std::endl;
+            break;
         }
 
-        // LN
+        // ---- LN ----
         auto x_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::rms_norm(x_norm, x, attn_norm, meta.epsilon);
+       
+        // ---- Q/K/V ----
+        size_t Qd = safe_dim(q_w, 0);
+        size_t Kd = safe_dim(k_w, 0);
+        size_t Vd = safe_dim(v_w, 0);
 
-        // Q/K/V
-        size_t Qd = safe_dim(q_w, 0), Kd = safe_dim(k_w, 0), Vd = safe_dim(v_w, 0);
-        auto q = Tensor::create({T, Qd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto k = Tensor::create({T, Kd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto v = Tensor::create({T, Vd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        if (Qd != meta.nh * meta.dh || Kd != meta.nkvh * meta.dh || Vd != meta.nkvh * meta.dh) {
+            std::cerr << "[Prefill] layer " << l << " Q/K/V shape mismatch"
+                      << " got (" << Qd << "," << Kd << "," << Vd << ")" << std::endl;
+            break;
+        }
 
-        ops::linear(q, x_norm, q_w, q_b);
-        ops::linear(k, x_norm, k_w, k_b);
-        ops::linear(v, x_norm, v_w, v_b);
+        auto q2d = Tensor::create({T, Qd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto k2d = Tensor::create({T, Kd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto v2d = Tensor::create({T, Vd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
 
-        // RoPE
+        ops::linear(q2d, x_norm, q_w, q_b);
+        ops::linear(k2d, x_norm, k_w, k_b);
+        ops::linear(v2d, x_norm, v_w, v_b);
+       
+        auto q = q2d->view({T, (size_t)meta.nh,   (size_t)meta.dh});
+        auto k = k2d->view({T, (size_t)meta.nkvh, (size_t)meta.dh});
+        auto v = v2d->view({T, (size_t)meta.nkvh, (size_t)meta.dh});
+
         ops::rope(q, q, pos_ids, meta.theta);
         ops::rope(k, k, pos_ids, meta.theta);
-
-        // Self-Attn
-        auto attn = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+     
+        auto attn3d = Tensor::create({T, (size_t)meta.nh, (size_t)meta.dh}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         float scale = (meta.dh > 0) ? (1.0f / std::sqrt(float(meta.dh))) : 1.0f;
-        ops::self_attention(attn, q, k, v, scale);
+        ops::self_attention(attn3d, q, k, v, scale);
+       
+       
+        
+        auto attn = attn3d->view({T, H});
+        
 
-        // 投影 + 残差
         auto o = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        ops::linear(o, attn, o_w, nullptr);
+     
 
+
+        ops::linear(o, attn, o_w, nullptr);
         auto x_res1 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::add(x_res1, x, o);
 
-        // MLP：LN -> gate/up -> swiglu -> down -> 残差
+        // ---- MLP ----
         auto y_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::rms_norm(y_norm, x_res1, mlp_norm, meta.epsilon);
 
         size_t Id = safe_dim(gate_w, 0);
+        if (Id != (size_t)meta.di) {
+            std::cerr << "[Prefill] layer " << l << " MLP dim mismatch, expect "
+                      << meta.di << " got " << Id << std::endl;
+            break;
+        }
+
         auto gate = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         auto up   = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::linear(gate, y_norm, gate_w, nullptr);
@@ -187,36 +225,58 @@ int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
         auto act  = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::swiglu(act, gate, up);
 
+
         auto down = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::linear(down, act, down_w, nullptr);
 
         auto x_res2 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+
+
+
         ops::add(x_res2, x_res1, down);
 
-        x = x_res2; // 下一层
+
+        x = x_res2; // 下一层输入
     }
 
-    // 输出层：LN -> 取最后一步 -> out_proj -> argmax
+    // ---- 输出层 ----
     auto x_last = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
     ops::rms_norm(x_last, x, out_norm, meta.epsilon);
 
     auto last_h = x_last->slice(0, T - 1, T); // [1,H]
-
+    
     size_t Vocab = safe_dim(out_embed, 0);
     auto logits = Tensor::create({1, Vocab}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+
+
+    //  [1, 151936]   [1. H] [151936,1536]
     ops::linear(logits, last_h, out_embed, nullptr);
 
+   
     auto max_idx = Tensor::create({1}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     auto max_val = Tensor::create({1}, LLAISYS_DTYPE_F32, dev_type, dev_id);
     ops::argmax(max_idx, max_val, logits);
 
-    last_logits_ = logits; // 保存一份，C API 可通过 logits_tensor() 取句柄
-    return read_scalar_from_tensor<int64_t>(max_idx);
+    last_logits_ = logits;
+    auto next_id = read_scalar_from_tensor<int64_t>(max_idx);
+    std::cerr << "[Prefill] done, next_id=" << next_id << std::endl;
+    return next_id;
 }
 
+
 int64_t Qwen2Impl::decode_one(int64_t token_id) {
-    // 极简：直接把该 token 当作长度=1 的序列跑一次
-    return prefill(&token_id, 1);
+    // 续写：只追加到上下文
+    ctx_tokens_.push_back(token_id);
+    // 用整个上下文跑前向（若以后接入KV cache，这里可改成增量）
+    return forward(ctx_tokens_.data(), ctx_tokens_.size());
+}
+
+
+int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
+    // 第一次：覆盖上下文
+    ctx_tokens_.assign(token_ids, token_ids + T);
+    // 用整个上下文跑前向（不再用传入指针）
+    return forward(ctx_tokens_.data(), ctx_tokens_.size());
 }
 
 } // namespace llaisys::models::qwen2

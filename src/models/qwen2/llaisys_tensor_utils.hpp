@@ -4,18 +4,19 @@
 
 namespace llaisys {
 
-// 把 C++ shared_ptr<Tensor> 转成 C 句柄（裸指针，不转移所有权）
 inline llaisysTensor_t to_c_handle(const tensor_t& t) {
-    return t ? reinterpret_cast<llaisysTensor_t>(t.get()) : nullptr;
+    if (!t) return nullptr;
+    auto* wrap = new LlaisysTensor{};
+    wrap->tensor = t;  // 引用计数+1
+    return reinterpret_cast<llaisysTensor_t>(wrap);
 }
 
-// 从 C 句柄“借用”为 shared_ptr（不拥有、不会销毁底层 Tensor）
-// 注意：这个 shared_ptr 不会释放底层 Tensor，
-// 真实的内存释放仍然由 tensorDestroy(...) 负责。
-// 用途：方便算子/实现里以 tensor_t (shared_ptr<Tensor>) 形式操作。
 inline tensor_t borrow(llaisysTensor_t h) {
     if (!h) return nullptr;
-    return tensor_t(reinterpret_cast<Tensor*>(h), [](Tensor*){/* no-op */});
+    auto* wrap = reinterpret_cast<LlaisysTensor*>(h);
+    return wrap->tensor;  // 不会释放底层 Tensor
 }
+
+
 
 } // namespace llaisys

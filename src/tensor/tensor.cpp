@@ -244,7 +244,7 @@ tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
 
 void Tensor::load(const void *src_) {
     //get runtime device type
-    std::cout << "Dest ptr: " << this->data() << ", Src ptr: " << src_ << std::endl;
+    //std::cout << "Dest ptr: " << this->data() << ", Src ptr: " << src_ << std::endl;
 
     auto device_type = core::context().runtime().deviceType();
      size_t total_size = this->numel() * this->elementSize();

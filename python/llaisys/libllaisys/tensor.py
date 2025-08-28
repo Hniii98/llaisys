@@ -1,8 +1,14 @@
-from ctypes import POINTER, c_uint8, c_void_p, c_size_t, c_ssize_t, c_int
+from ctypes import POINTER, c_uint8, c_void_p, c_size_t, c_ssize_t, c_int, Structure
 from .llaisys_types import llaisysDataType_t, llaisysDeviceType_t
 
 # Handle type
-llaisysTensor_t = c_void_p
+# llaisysTensor_t = c_void_p
+
+class LlaisysTensor(Structure):
+    """Opaque struct: we don’t know its fields, but ctypes needs a name"""
+    pass
+
+llaisysTensor_t = POINTER(LlaisysTensor)
 
 
 def load_tensor(lib):
