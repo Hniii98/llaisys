@@ -4,7 +4,11 @@
 
 namespace llaisys::ops {
 void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
-    CHECK_SAME_DEVICE(out, in, weight, bias);
+     if (bias) {
+        CHECK_SAME_DEVICE(out, in, weight, bias);
+    } else {
+        CHECK_SAME_DEVICE(out, in, weight);
+    }
     
     ASSERT(out->isContiguous() && in->isContiguous() & weight->isContiguous(), 
            "Linear: all input should be contiguous.");
