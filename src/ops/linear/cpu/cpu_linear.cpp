@@ -94,59 +94,54 @@ namespace llaisys::ops::cpu {
 
 
 	template <typename T>
-	void linear_(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
-		size_t N = in->shape()[0];
-		size_t D_in = in->shape()[1];
-		size_t D_out = weight->shape()[0];
-		
-		const T* in_data = reinterpret_cast<const T*>(in->data());
-		const T* weight_data = reinterpret_cast<const T*>(weight->data());
-		T* out_data = reinterpret_cast<T*>(out->data());
-		const T* bias_data = bias ? reinterpret_cast<const T*>(bias->data()) : nullptr;
+void linear_(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
+    size_t N = in->shape()[0];
+    size_t D_in = in->shape()[1];
+    size_t D_out = weight->shape()[1];  
 
-		for (size_t i = 0; i < N; i++) {
-			for (size_t j = 0; j < D_out; j++) {
-				float sum = 0.0f;  // 使用float进行累加，避免精度问题
-				
-				for (size_t k = 0; k < D_in; k++) {
-					// 转换为float进行计算
-					float in_val;
-					float weight_val;
-					
-					if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-						in_val = llaisys::utils::cast<float>(in_data[i * D_in + k]);
-						weight_val = llaisys::utils::cast<float>(weight_data[j * D_in + k]);
-					} else {
-						in_val = static_cast<float>(in_data[i * D_in + k]);
-						weight_val = static_cast<float>(weight_data[j * D_in + k]);
-					}
-					
-					sum += in_val * weight_val;
-				}
-				
-				// 转换为目标类型
-				T result;
-				if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-					result = llaisys::utils::cast<T>(sum);
-				} else {
-					result = static_cast<T>(sum);
-				}
-				
-				out_data[i * D_out + j] = result;
-				
-				// 添加偏置
-				if (bias_data) {
-					if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-						float bias_val = llaisys::utils::cast<float>(bias_data[j]);
-						float out_val = llaisys::utils::cast<float>(out_data[i * D_out + j]);
-						out_data[i * D_out + j] = llaisys::utils::cast<T>(out_val + bias_val);
-					} else {
-						out_data[i * D_out + j] += bias_data[j];
-					}
-				}
-			}
-		}
-	}
+    const T* in_data = reinterpret_cast<const T*>(in->data());
+    const T* weight_data = reinterpret_cast<const T*>(weight->data());
+    T* out_data = reinterpret_cast<T*>(out->data());
+    const T* bias_data = bias ? reinterpret_cast<const T*>(bias->data()) : nullptr;
+
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < D_out; j++) {
+            float sum = 0.0f;
+            for (size_t k = 0; k < D_in; k++) {
+                float in_val, w_val;
+
+                if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+                    in_val = llaisys::utils::cast<float>(in_data[i * D_in + k]);
+                    w_val  = llaisys::utils::cast<float>(weight_data[k * D_out + j]); 
+                } else {
+                    in_val = static_cast<float>(in_data[i * D_in + k]);
+                    w_val  = static_cast<float>(weight_data[k * D_out + j]);
+                }
+
+                sum += in_val * w_val;
+            }
+
+            // 写结果
+            if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+                out_data[i * D_out + j] = llaisys::utils::cast<T>(sum);
+            } else {
+                out_data[i * D_out + j] = static_cast<T>(sum);
+            }
+
+            // 加偏置
+            if (bias_data) {
+                if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+                    float bias_val = llaisys::utils::cast<float>(bias_data[j]);
+                    float out_val  = llaisys::utils::cast<float>(out_data[i * D_out + j]);
+                    out_data[i * D_out + j] = llaisys::utils::cast<T>(out_val + bias_val);
+                } else {
+                    out_data[i * D_out + j] += bias_data[j];
+                }
+            }
+        }
+    }
+}
+
 
 	
 	void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
