@@ -12,9 +12,10 @@ from .llaisys_types import llaisysStream_t
 from .tensor import llaisysTensor_t
 from .tensor import load_tensor
 from .ops import load_ops
-from .qwen2 import load_qwen2
 from .qwen2 import LlaisysQwen2Meta
+from .qwen2 import LlaisysQwen2Model, llaisysQwen2Model_p
 from .qwen2 import LlaisysQwen2Weights
+from .qwen2 import load_qwen2
 
 def load_shared_library():
     lib_dir = Path(__file__).parent
@@ -54,8 +55,8 @@ __all__ = [
     "DeviceType",
     "llaisysMemcpyKind_t",
     "MemcpyKind",
-    "llaisysStream_t",
 
     "LlaisysQwen2Meta",
     "LlaisysQwen2Weights",
-]
+    "llaisysQwen2Model_p",
+] 
