@@ -12,6 +12,7 @@ __C {
     };
 
     struct LlaisysQwen2Weights {
+
         llaisysTensor_t in_embed;
         llaisysTensor_t out_embed;
         llaisysTensor_t out_norm_w;   // a.k.a. model.norm.weight
@@ -29,6 +30,8 @@ __C {
         llaisysTensor_t *mlp_down_w;
     };
 
+
+    
     struct LlaisysQwen2Model;
 
     __export struct LlaisysQwen2Model *llaisysQwen2ModelCreate(const LlaisysQwen2Meta *meta, llaisysDeviceType_t device, int *device_ids, int ndevice);
