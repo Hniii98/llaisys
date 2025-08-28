@@ -5,10 +5,6 @@ from .llaisys_types import llaisysDataType_t, llaisysDeviceType_t
 from .tensor import llaisysTensor_t
 
 
-#
-
-
-# Define structure 
 class LlaisysQwen2Meta(Structure):
     _fields_ = [
         ("dtype", llaisysDataType_t),
@@ -25,7 +21,6 @@ class LlaisysQwen2Meta(Structure):
         ("end_token", c_int64),
     ]
 
-# Define structure 
 class LlaisysQwen2Weights(Structure):
     _fields_ = [
         ("in_embed", llaisysTensor_t),
@@ -45,54 +40,41 @@ class LlaisysQwen2Weights(Structure):
         ("mlp_down_w", POINTER(llaisysTensor_t)),
     ]
 
-
 class LlaisysQwen2Model(Structure):
     pass
 
 llaisysQwen2Model_p = POINTER(LlaisysQwen2Model)
 
 
+
 def load_qwen2(lib):
- 
+    # model create/destroy
     lib.llaisysQwen2ModelCreate.argtypes = [
-        POINTER(LlaisysQwen2Meta), # meta
-        llaisysDeviceType_t, # device
-        POINTER(c_int), # device_ids
-        c_int # ndevice
+        POINTER(LlaisysQwen2Meta),
+        llaisysDeviceType_t,
+        POINTER(c_int),
+        c_int,
     ]
     lib.llaisysQwen2ModelCreate.restype = llaisysQwen2Model_p
 
     lib.llaisysQwen2ModelDestroy.argtypes = [llaisysQwen2Model_p]
     lib.llaisysQwen2ModelDestroy.restype = None
 
+    # weights
     lib.llaisysQwen2ModelWeights.argtypes = [llaisysQwen2Model_p]
     lib.llaisysQwen2ModelWeights.restype = POINTER(LlaisysQwen2Weights)
 
+    # infer/forward
     lib.llaisysQwen2ModelInfer.argtypes = [
         llaisysQwen2Model_p,
         POINTER(c_int64),
-        c_size_t
+        c_size_t,
     ]
     lib.llaisysQwen2ModelInfer.restype = c_int64
 
-    lib.llaisysQwen2ModelForwardOne.argtypes = [
-        llaisysQwen2Model_p,
-        c_int64
-    ]
+    lib.llaisysQwen2ModelForwardOne.argtypes = [llaisysQwen2Model_p, c_int64]
     lib.llaisysQwen2ModelForwardOne.restype = c_int64
 
+    # logits
     lib.llaisysQwen2ModelLogits.argtypes = [llaisysQwen2Model_p]
     lib.llaisysQwen2ModelLogits.restype = llaisysTensor_t
-
-
-__all__ = [
-    "LlaisysQwen2Meta",
-    "LlaisysQwen2Weights",
-    "llaisysQwen2Model_p",
-    "llaisysQwen2ModelCreate",
-    "llaisysQwen2ModelDestroy",
-    "llaisysQwen2ModelWeights",
-    "llaisysQwen2ModelInfer",
-    "llaisysQwen2ModelForwardOne",
-    "llaisysQwen2ModelLogits",
-]
