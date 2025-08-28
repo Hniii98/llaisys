@@ -1,7 +1,9 @@
 add_rules("mode.debug", "mode.release")
 set_encodings("utf-8")
 
-add_includedirs("include")
+-- add_includedirs("include")
+add_includedirs("include", "src")
+
 
 -- CPU --
 includes("xmake/cpu.lua")
@@ -95,6 +97,27 @@ target("llaisys-ops")
     on_install(function (target) end)
 target_end()
 
+-- 模型集合（目前只有 qwen2）
+target("llaisys-models")
+    set_kind("static")
+    add_deps("llaisys-tensor", "llaisys-ops")  -- 模型依赖 tensor/ops
+
+    set_languages("cxx17")
+    set_warnings("all", "error")
+    if not is_plat("windows") then
+        add_cxflags("-fPIC", "-Wno-unknown-pragmas")
+    end
+
+    -- 胶水：C API 实现（注意是 src/llaisys/models/ 目录）
+    add_files("src/llaisys/models/*.cc")
+    -- 模型实现：C++ 后端
+    add_files("src/models/qwen2/*.cpp")
+
+    on_install(function (target) end)
+target_end()
+
+
+
 target("llaisys")
     set_kind("shared")
     add_deps("llaisys-utils")
@@ -102,10 +125,13 @@ target("llaisys")
     add_deps("llaisys-core")
     add_deps("llaisys-tensor")
     add_deps("llaisys-ops")
+    add_deps("llaisys-models")
+
+    
 
     set_languages("cxx17")
     set_warnings("all", "error")
-    add_files("src/llaisys/*.cc")
+    add_files("src/llaisys/*.cc", "src/llaisys/models/*.cc")
     set_installdir(".")
 
     
