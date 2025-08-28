@@ -98,29 +98,29 @@ if __name__ == "__main__":
 
     tokenizer, model, model_path = load_hf_model(args.model, args.device)
 
-    # Example prompt
-    # start_time = time.time()
-    # tokens, output = hf_infer(
-    #     args.prompt,
-    #     tokenizer,
-    #     model,
-    #     max_new_tokens=args.max_steps,
-    #     top_p=top_p,
-    #     top_k=top_k,
-    #     temperature=temperature,
-    # )
-    # end_time = time.time()
+    Example prompt
+    start_time = time.time()
+    tokens, output = hf_infer(
+        args.prompt,
+        tokenizer,
+        model,
+        max_new_tokens=args.max_steps,
+        top_p=top_p,
+        top_k=top_k,
+        temperature=temperature,
+    )
+    end_time = time.time()
 
     del model
     gc.collect()
 
-    # print("\n=== Answer ===\n")
-    # print("Tokens:")
-    # print(tokens)
-    # print("\nContents:")
-    # print(output)
-    # print("\n")
-    # print(f"Time elapsed: {(end_time - start_time):.2f}s\n")
+    print("\n=== Answer ===\n")
+    print("Tokens:")
+    print(tokens)
+    print("\nContents:")
+    print(output)
+    print("\n")
+    print(f"Time elapsed: {(end_time - start_time):.2f}s\n")
 
     model = load_llaisys_model(model_path, args.device)
     start_time = time.time()
