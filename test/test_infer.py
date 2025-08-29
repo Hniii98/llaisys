@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     tokenizer, model, model_path = load_hf_model(args.model, args.device)
 
-    Example prompt
+    # Example prompt
     start_time = time.time()
     tokens, output = hf_infer(
         args.prompt,
