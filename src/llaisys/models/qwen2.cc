@@ -2,6 +2,7 @@
 #include "llaisys/models/qwen2.h"
 #include "../llaisys_tensor.hpp"            
 #include "models/qwen2/qwen2_impl.hpp"        
+#include "models/qwen2/llaisys_tensor_utils.hpp"
 
 #include <memory>
 #include <new>        
