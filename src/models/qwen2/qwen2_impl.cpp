@@ -86,17 +86,18 @@ Qwen2Impl::Qwen2Impl(const LlaisysQwen2Meta& meta_,
     : meta(meta_), device(device_) {
     if (device_ids_ && ndevice > 0) device_ids.assign(device_ids_, device_ids_ + ndevice);
     alloc_weight_arrays(weights, meta.nlayer);
+
+   
 }
 Qwen2Impl::~Qwen2Impl() {
     free_all_weights_and_tensors(weights, meta.nlayer);
 }
 
-int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
-     std::cerr << "[Prefill] start, T=" << T << std::endl;
-   
+int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) {
+    std::cerr << "[Forward] start, T=" << T << " pos_base=" << pos_base << std::endl;
 
     if (!weights.in_embed || !weights.out_embed || !weights.out_norm_w) {
-        std::cerr << "[Prefill] ERROR: missing essential weights" << std::endl;
+        std::cerr << "[Forward] ERROR: missing essential weights" << std::endl;
         return (T ? token_ids[T-1] : (meta.end_token >= 0 ? meta.end_token : 0));
     }
 
@@ -104,19 +105,17 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
     auto out_embed = llaisys::borrow(weights.out_embed);
     auto out_norm  = llaisys::borrow(weights.out_norm_w);
 
-
     size_t V = safe_dim(in_embed, 0);
     size_t H = safe_dim(in_embed, 1);
-
     if (!V || !H) {
-        std::cerr << "[Prefill] ERROR: invalid in_embed dims" << std::endl;
+        std::cerr << "[Forward] ERROR: invalid in_embed dims" << std::endl;
         return (T ? token_ids[T-1] : (meta.end_token >= 0 ? meta.end_token : 0));
     }
 
-    // --- 检查 token 是否越界 ---
+    // 越界检查
     for (size_t i = 0; i < T; i++) {
         if (token_ids[i] < 0 || token_ids[i] >= (int64_t)V) {
-            std::cerr << "[Prefill] ERROR: token_ids[" << i << "]=" << token_ids[i]
+            std::cerr << "[Forward] ERROR: token_ids[" << i << "]=" << token_ids[i]
                       << " out of range vocab=" << V << std::endl;
             return (meta.end_token >= 0 ? meta.end_token : 0);
         }
@@ -125,21 +124,28 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
     auto dev_type = in_embed->deviceType();
     auto dev_id   = in_embed->deviceId();
 
-    // --- embedding lookup ---
+    // embedding
     auto indices = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     indices->load(token_ids);
-
     auto x = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+    ops::embedding(x, indices, in_embed);
 
-   
-    // --- pos_ids ---
+    // pos ids（带偏移）
+    // auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
+    // {
+    //     std::vector<int64_t> p(T);
+    //     for (size_t i=0;i<T;++i) p[i] = int64_t(pos_base + i);
+    //     pos_ids->load(p.data());
+    // }
     auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
-    { std::vector<int64_t> p(T); for (size_t i=0;i<T;++i) p[i]=int64_t(i); pos_ids->load(p.data()); }
+    {
+        std::vector<int64_t> p(T);
+        for (size_t i = 0; i < T; ++i) p[i] = static_cast<int64_t>(pos_base + i);
+        pos_ids->load(p.data());
+    }
 
-    // --- Transformer blocks ---
+    // blocks
     for (size_t l = 0; l < meta.nlayer; ++l) {
-        std::cerr << "[Prefill] ---- layer " << l << " ----" << std::endl;
-
         auto attn_norm = weights.attn_norm_w ? llaisys::borrow(weights.attn_norm_w[l]) : nullptr;
         auto q_w = weights.attn_q_w ? llaisys::borrow(weights.attn_q_w[l]) : nullptr;
         auto q_b = weights.attn_q_b ? llaisys::borrow(weights.attn_q_b[l]) : nullptr;
@@ -153,66 +159,77 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
         auto gate_w   = weights.mlp_gate_w ? llaisys::borrow(weights.mlp_gate_w[l]) : nullptr;
         auto up_w     = weights.mlp_up_w   ? llaisys::borrow(weights.mlp_up_w[l])   : nullptr;
         auto down_w   = weights.mlp_down_w ? llaisys::borrow(weights.mlp_down_w[l]) : nullptr;
-        
+
         if (!attn_norm || !q_w || !k_w || !v_w || !o_w || !mlp_norm || !gate_w || !up_w || !down_w) {
-            std::cerr << "[Prefill] missing weight(s) in layer " << l << ", stop" << std::endl;
+            std::cerr << "[Forward] missing weight(s) in layer " << l << ", stop" << std::endl;
             break;
         }
 
-        // ---- LN ----
+        // LN
         auto x_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::rms_norm(x_norm, x, attn_norm, meta.epsilon);
-       
-        // ---- Q/K/V ----
+
+        // Q/K/V (仅针对本块 T 个 token)
         size_t Qd = safe_dim(q_w, 0);
         size_t Kd = safe_dim(k_w, 0);
         size_t Vd = safe_dim(v_w, 0);
-
         if (Qd != meta.nh * meta.dh || Kd != meta.nkvh * meta.dh || Vd != meta.nkvh * meta.dh) {
-            std::cerr << "[Prefill] layer " << l << " Q/K/V shape mismatch"
+            std::cerr << "[Forward] layer " << l << " Q/K/V shape mismatch"
                       << " got (" << Qd << "," << Kd << "," << Vd << ")" << std::endl;
             break;
         }
 
-        auto q2d = Tensor::create({T, Qd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto k2d = Tensor::create({T, Kd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto v2d = Tensor::create({T, Vd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto q2d = Tensor::create({T, (size_t)Qd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto k2d = Tensor::create({T, (size_t)Kd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto v2d = Tensor::create({T, (size_t)Vd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
 
         ops::linear(q2d, x_norm, q_w, q_b);
         ops::linear(k2d, x_norm, k_w, k_b);
         ops::linear(v2d, x_norm, v_w, v_b);
-       
+
         auto q = q2d->view({T, (size_t)meta.nh,   (size_t)meta.dh});
         auto k = k2d->view({T, (size_t)meta.nkvh, (size_t)meta.dh});
         auto v = v2d->view({T, (size_t)meta.nkvh, (size_t)meta.dh});
 
+        // rope
         ops::rope(q, q, pos_ids, meta.theta);
         ops::rope(k, k, pos_ids, meta.theta);
-     
-        auto attn3d = Tensor::create({T, (size_t)meta.nh, (size_t)meta.dh}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+
+        // 写入 KV 缓存
+        if (use_kv_cache_) {
+            append_kv(l, k, v, pos_base);
+        }
+
+        // 准备注意力的 K/V（历史 + 当前）
+        tensor_t k_all = k;
+        tensor_t v_all = v;
+        if (use_kv_cache_) {
+            size_t total_len = pos_base + T;                // 历史长度 + 当前块
+            k_all = view_k_total(l, total_len);             // [total_len, nkvh, dh]
+            v_all = view_v_total(l, total_len);
+        }
+
+        // 注意力：Q 只用本块，K/V 用全量
+        auto attn3d = Tensor::create({T, (size_t)meta.nh, (size_t)meta.dh},
+                                     LLAISYS_DTYPE_F32, dev_type, dev_id);
         float scale = (meta.dh > 0) ? (1.0f / std::sqrt(float(meta.dh))) : 1.0f;
-        ops::self_attention(attn3d, q, k, v, scale);
-       
-       
-        
+        // 要求 ops::self_attention 支持 len_q != len_kv（大多数实现都支持）
+        ops::self_attention(attn3d, q, k_all, v_all, scale);
+
         auto attn = attn3d->view({T, H});
-        
-
         auto o = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-     
-
-
         ops::linear(o, attn, o_w, nullptr);
+
         auto x_res1 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::add(x_res1, x, o);
 
-        // ---- MLP ----
+        // MLP
         auto y_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::rms_norm(y_norm, x_res1, mlp_norm, meta.epsilon);
 
         size_t Id = safe_dim(gate_w, 0);
         if (Id != (size_t)meta.di) {
-            std::cerr << "[Prefill] layer " << l << " MLP dim mismatch, expect "
+            std::cerr << "[Forward] layer " << l << " MLP dim mismatch, expect "
                       << meta.di << " got " << Id << std::endl;
             break;
         }
@@ -225,58 +242,148 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T){
         auto act  = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::swiglu(act, gate, up);
 
-
         auto down = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
         ops::linear(down, act, down_w, nullptr);
 
         auto x_res2 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-
-
-
         ops::add(x_res2, x_res1, down);
-
-
-        x = x_res2; // 下一层输入
+        x = x_res2;
     }
 
-    // ---- 输出层 ----
+    // 输出层（取最后一步）
     auto x_last = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
     ops::rms_norm(x_last, x, out_norm, meta.epsilon);
-
     auto last_h = x_last->slice(0, T - 1, T); // [1,H]
-    
+
     size_t Vocab = safe_dim(out_embed, 0);
     auto logits = Tensor::create({1, Vocab}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-
-
-    //  [1, 151936]   [1. H] [151936,1536]
     ops::linear(logits, last_h, out_embed, nullptr);
 
-   
     auto max_idx = Tensor::create({1}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     auto max_val = Tensor::create({1}, LLAISYS_DTYPE_F32, dev_type, dev_id);
     ops::argmax(max_idx, max_val, logits);
 
     last_logits_ = logits;
-    auto next_id = read_scalar_from_tensor<int64_t>(max_idx);
-    std::cerr << "[Prefill] done, next_id=" << next_id << std::endl;
+    int64_t next_id = read_scalar_from_tensor<int64_t>(max_idx);
+    std::cerr << "[Forward] done, next_id=" << next_id << std::endl;
+    return next_id;
+}
+
+// ============== 对外接口 ==============
+int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
+    // 覆盖上下文，清空缓存
+    ctx_tokens_.assign(token_ids, token_ids + T);
+    reset_cache();
+    // prefill 一次性跑 T，并把 K/V 写入缓存（pos_base=0）
+    int64_t next_id = forward(ctx_tokens_.data(), ctx_tokens_.size(), /*pos_base=*/0);
+    // prefill 完成后，cache_len_ 已更新为 T
+    return next_id;
+}
+
+int64_t Qwen2Impl::decode_one(int64_t token_id) {
+    // 这一步 token 的绝对位置
+    size_t pos = ctx_tokens_.size();
+    ctx_tokens_.push_back(token_id);
+    // 只算这 1 个 token（pos_base=pos），并把它的 K/V 追加到缓存
+    int64_t next_id = forward(&ctx_tokens_.back(), /*T=*/1, /*pos_base=*/pos);
     return next_id;
 }
 
 
-int64_t Qwen2Impl::decode_one(int64_t token_id) {
-    // 续写：只追加到上下文
-    ctx_tokens_.push_back(token_id);
-    // 用整个上下文跑前向（若以后接入KV cache，这里可改成增量）
-    return forward(ctx_tokens_.data(), ctx_tokens_.size());
+
+
+void Qwen2Impl::reset_cache() {
+    k_cache_.assign(meta.nlayer, nullptr);
+    v_cache_.assign(meta.nlayer, nullptr);
+    cache_len_ = 0;
 }
 
 
-int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
-    // 第一次：覆盖上下文
-    ctx_tokens_.assign(token_ids, token_ids + T);
-    // 用整个上下文跑前向（不再用传入指针）
-    return forward(ctx_tokens_.data(), ctx_tokens_.size());
+void Qwen2Impl::ensure_layer_cache_capacity(size_t layer, size_t need_total_len,
+                                            llaisysDataType_t dtype,
+                                            llaisysDeviceType_t dev, int dev_id) {
+    size_t nkvh = (size_t)meta.nkvh;
+    size_t dh   = (size_t)meta.dh;
+
+    auto grow = [&](tensor_t& buf) {
+        size_t old_cap = buf ? buf->shape()[0] : 0;
+        if (old_cap >= need_total_len) return;
+
+        // 新容量：倍增或直接到 need_total_len
+        size_t new_cap = old_cap ? old_cap : 1;
+        while (new_cap < need_total_len) new_cap = new_cap * 2;
+
+        // 新 tensor
+        auto new_buf = Tensor::create({new_cap, nkvh, dh}, dtype, dev, dev_id);
+
+        // 拷贝旧数据
+        if (buf) {
+            size_t elem_size = llaisys::utils::dsize(dtype);
+            size_t to_copy = old_cap * nkvh * dh * elem_size;
+            core::context().runtime().api()->memcpy_sync(
+                new_buf->data(), buf->data(), to_copy,
+                (dev == LLAISYS_DEVICE_CPU) ? LLAISYS_MEMCPY_D2D : LLAISYS_MEMCPY_D2D
+            );
+        }
+        buf = new_buf;
+    };
+
+    grow(k_cache_[layer]);
+    grow(v_cache_[layer]);
+}
+
+void Qwen2Impl::append_kv(size_t layer, const tensor_t& k_t, const tensor_t& v_t, size_t pos_base) {
+    // k_t/v_t: [T, nkvh, dh]
+    auto dev_type = k_t->deviceType();
+    auto dev_id   = k_t->deviceId();
+    auto dtype    = k_t->dtype();
+
+    size_t T     = k_t->shape()[0];
+    size_t nkvh  = k_t->shape()[1];
+    size_t dh    = k_t->shape()[2];
+    size_t need_total_len = pos_base + T;
+
+    ensure_layer_cache_capacity(layer, need_total_len, dtype, dev_type, dev_id);
+
+    // 目标指针 = 缓存基址 + pos_base * (nkvh*dh)
+    auto api = core::context().runtime().api();
+    size_t elem_size = llaisys::utils::dsize(dtype);
+    size_t row_elems = nkvh * dh;
+    size_t row_bytes = row_elems * elem_size;
+
+    // k
+    {
+        std::byte* dst_base = reinterpret_cast<std::byte*>(k_cache_[layer]->data());
+        const std::byte* src_base = reinterpret_cast<const std::byte*>(k_t->data());
+        for (size_t t = 0; t < T; ++t) {
+            void* dst = dst_base + (pos_base + t) * row_bytes;
+            const void* src = src_base + t * row_bytes;
+            api->memcpy_sync(dst, src, row_bytes,
+                (dev_type == LLAISYS_DEVICE_CPU) ? LLAISYS_MEMCPY_D2D : LLAISYS_MEMCPY_D2D);
+        }
+    }
+    // v
+    {
+        std::byte* dst_base = reinterpret_cast<std::byte*>(v_cache_[layer]->data());
+        const std::byte* src_base = reinterpret_cast<const std::byte*>(v_t->data());
+        for (size_t t = 0; t < T; ++t) {
+            void* dst = dst_base + (pos_base + t) * row_bytes;
+            const void* src = src_base + t * row_bytes;
+            api->memcpy_sync(dst, src, row_bytes,
+                (dev_type == LLAISYS_DEVICE_CPU) ? LLAISYS_MEMCPY_D2D : LLAISYS_MEMCPY_D2D);
+        }
+    }
+
+    // 更新缓存长度（最大位置+1）
+    if (cache_len_ < need_total_len) cache_len_ = need_total_len;
+}
+
+tensor_t Qwen2Impl::view_k_total(size_t layer, size_t total_len) const {
+    // 返回 [total_len, nkvh, dh] 的前缀 view（底层是 contiguous，直接 slice）
+    return k_cache_[layer]->slice(0, 0, total_len);
+}
+tensor_t Qwen2Impl::view_v_total(size_t layer, size_t total_len) const {
+    return v_cache_[layer]->slice(0, 0, total_len);
 }
 
 } // namespace llaisys::models::qwen2

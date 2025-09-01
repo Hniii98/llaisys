@@ -2,7 +2,8 @@
 #include "llaisys/models/qwen2.h"
 #include "../llaisys_tensor.hpp"            
 #include "models/qwen2/qwen2_impl.hpp"        
-#include "models/qwen2/llaisys_tensor_utils.hpp"
+#include "models/qwen2/llaisys_tensor_utils.hpp" 
+//不要依赖“某个头文件间接 include 了 utils”，在 MSVC 下不稳。
 
 #include <memory>
 #include <new>        

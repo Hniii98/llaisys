@@ -92,6 +92,7 @@ class Qwen2:
         meta.end_token = eos
         self.meta = meta
 
+     
         # 2) 创建 C++ 模型
         self.model = C.llaisysQwen2ModelCreate(meta, device, None, 0)
         if not self.model:
@@ -112,16 +113,14 @@ class Qwen2:
         w = self.weights.contents
         nl = self.meta.nlayer
 
-        # 打印基本信息
-        # print(f"[LOAD] {name}")
-        # print(f"[DEBUG] assign {name} -> {t}")
+
 
         if name == "model.embed_tokens.weight":
-            w.in_embed = t; print("  -> in_embed"); return
+            w.in_embed = t;  return
         if name == "lm_head.weight":
-            w.out_embed = t; print("  -> out_embed"); return
+            w.out_embed = t;  return
         if name == "model.norm.weight":
-            w.out_norm_w = t; print("  -> out_norm_w"); return
+            w.out_norm_w = t;  return
 
         prefix = "model.layers."
         if not name.startswith(prefix):
@@ -140,31 +139,31 @@ class Qwen2:
 
         # 根据 tail 分配
         if tail == "input_layernorm.weight":
-            w.attn_norm_w[i] = t; print(f"  -> attn_norm_w[{i}]"); return
+            w.attn_norm_w[i] = t;  return
         if tail == "post_attention_layernorm.weight":
-            w.mlp_norm_w[i] = t; print(f"  -> mlp_norm_w[{i}]"); return
+            w.mlp_norm_w[i] = t;  return
 
         if tail == "self_attn.q_proj.weight":
-            w.attn_q_w[i] = t; print(f"  -> attn_q_w[{i}]"); return
+            w.attn_q_w[i] = t;  return
         if tail == "self_attn.q_proj.bias":
-            w.attn_q_b[i] = t; print(f"  -> attn_q_b[{i}]"); return
+            w.attn_q_b[i] = t;  return
         if tail == "self_attn.k_proj.weight":
-            w.attn_k_w[i] = t; print(f"  -> attn_k_w[{i}]"); return
+            w.attn_k_w[i] = t;  return
         if tail == "self_attn.k_proj.bias":
-            w.attn_k_b[i] = t; print(f"  -> attn_k_b[{i}]"); return
+            w.attn_k_b[i] = t;  return
         if tail == "self_attn.v_proj.weight":
-            w.attn_v_w[i] = t; print(f"  -> attn_v_w[{i}]"); return
+            w.attn_v_w[i] = t;  return
         if tail == "self_attn.v_proj.bias":
-            w.attn_v_b[i] = t; print(f"  -> attn_v_b[{i}]"); return
+            w.attn_v_b[i] = t;  return
         if tail == "self_attn.o_proj.weight":
-            w.attn_o_w[i] = t; print(f"  -> attn_o_w[{i}]"); return
+            w.attn_o_w[i] = t;  return
 
         if tail == "mlp.gate_proj.weight":
-            w.mlp_gate_w[i] = t; print(f"  -> mlp_gate_w[{i}]"); return
+            w.mlp_gate_w[i] = t;  return
         if tail == "mlp.up_proj.weight":
-            w.mlp_up_w[i] = t; print(f"  -> mlp_up_w[{i}]"); return
+            w.mlp_up_w[i] = t;  return
         if tail == "mlp.down_proj.weight":
-            w.mlp_down_w[i] = t; print(f"  -> mlp_down_w[{i}]"); return
+            w.mlp_down_w[i] = t;  return
 
         print(f"  [UNUSED] {tail}")
 
@@ -177,52 +176,67 @@ class Qwen2:
         max_new_tokens: int = None,
         top_k: int = 1,
         top_p: float = 0.8,
-        temperature: float = 0.8,):
-        
-        # 1) 取 eos（优先用模型自带，如果没有就尝试从 tokenizer 里拿；你说模型文件里有，所以这行通常生效）
-        eos_id = getattr(self, "eos_token_id", None)
+        temperature: float = 0.8,
+        verbose: bool = False,
+    ):
+        """
+        简单的贪心/采样解码逻辑
+        - 会在遇到 eos_token_id 或达到 max_new_tokens 时停止
+        - 如果两者都没有，就默认最多跑 512 步避免死循环
+        """
+
+        # 1) eos
+        eos_id = self.meta.end_token
+        if eos_id is None:
+            print("[generate] eos token setting wrong, stop.")
+            return out
+   
 
         # 2) prefill
         ids = np.asarray(list(inputs), dtype=np.int64)
         ids_ptr = ids.ctypes.data_as(ctypes.POINTER(ctypes.c_int64))
         nxt = C.llaisysQwen2ModelInfer(self.model, ids_ptr, ctypes.c_size_t(ids.size))
 
-        out = list(inputs)
+        out: list[int] = list(inputs)
+        new_tokens = 0
 
-        # 如果 C++ 返回负数，直接停
-        if nxt is None:
-            return out
-        if nxt < 0:
-            return out
-
-        # 如果遇到 EOS：把 eos 追加一次，然后停
-        if eos_id is not None and int(nxt) == int(eos_id):
-            out.append(int(nxt))
+        if nxt is None or nxt < 0:
+            print("[generate] prefill returned None/<0>, stop.")
             return out
 
-        # 正常情况：追加 prefill 的第一个 token
-        out.append(int(nxt))
-        last = int(nxt)
+        token = int(nxt)
+        out.append(token)
+        last = token
+        new_tokens += 1
+
+        if eos_id is not None and last == eos_id:
+            if verbose:
+                print("[generate] hit EOS on prefill, stop.")
+            return out
 
         # 3) decode loop
-        steps = (max_new_tokens or 0) - 1 if max_new_tokens else 0
-        for _ in range(steps):
+        limit = max_new_tokens if max_new_tokens is not None else 512
+
+        while new_tokens < limit:
             nxt = C.llaisysQwen2ModelForwardOne(self.model, ctypes.c_int64(last))
+            if nxt is None or nxt < 0:           # 先判空/判负
+                if verbose:
+                    print("[generate] forward_one returned None/<0>, stop.")
+                return out
 
-            if nxt is None:
-                break
-            if nxt < 0:
-                break
+            token = int(nxt)
+            out.append(token)
+            last = token
+            new_tokens += 1
 
-            # 碰到 EOS：追加一次后停止（也可以选择不追加，按你需要）
-            if eos_id is not None and int(nxt) == int(eos_id):
-                out.append(int(nxt))
-                break
+            if eos_id is not None and token == eos_id:
+                if verbose:
+                    print("[generate] hit EOS, stop.")
+                return out
 
-            out.append(int(nxt))
-            last = int(nxt)
-
+        print("[generate] reach context limit, stop.")
         return out
+
 
     def __del__(self):
         try:
