@@ -1,14 +1,20 @@
 from ctypes import POINTER, c_uint8, c_void_p, c_size_t, c_ssize_t, c_int, Structure
 from .llaisys_types import llaisysDataType_t, llaisysDeviceType_t
+from typing import TYPE_CHECKING, Any, TypeAlias
 
-# Handle type
-# llaisysTensor_t = c_void_p
 
+# More safely way to pass a handle, in this way ctypes will do the type check in runtime.
 class LlaisysTensor(Structure):
     """Opaque struct: we don’t know its fields, but ctypes needs a name"""
     pass
+llaisysTensor_t_runtime = POINTER(LlaisysTensor)
 
-llaisysTensor_t = POINTER(LlaisysTensor)
+# Using placeholder when python do static check.
+if TYPE_CHECKING:
+    llaisysTensor_t: TypeAlias = Any
+else:
+    llaisysTensor_t = llaisysTensor_t_runtime
+
 
 
 def load_tensor(lib):
