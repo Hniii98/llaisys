@@ -2,8 +2,7 @@ add_rules("mode.debug", "mode.release")
 set_encodings("utf-8")
 
 -- add_includedirs("include")
-add_includedirs("include", "src")
-
+add_includedirs("include", "src", {public = true})
 
 -- CPU --
 includes("xmake/cpu.lua")
@@ -17,6 +16,13 @@ option_end()
 
 if has_config("nv-gpu") then
     add_defines("ENABLE_NVIDIA_API")
+    if is_plat("windows") then
+        add_includedirs("$(env CUDA_PATH)/include", {public = true})
+        add_linkdirs("$(env CUDA_PATH)/lib/x64")
+    else
+        add_includedirs("/usr/local/cuda/include", {public = true})
+        add_linkdirs("/usr/local/cuda/lib64")
+    end
     includes("xmake/nvidia.lua")
 end
 
@@ -29,6 +35,9 @@ target("llaisys-utils")
         add_cxflags("-fPIC", "-Wno-unknown-pragmas")
     end
 
+
+
+
     add_files("src/utils/*.cpp")
 
     on_install(function (target) end)
@@ -39,6 +48,10 @@ target("llaisys-device")
     set_kind("static")
     add_deps("llaisys-utils")
     add_deps("llaisys-device-cpu")
+    if has_config("nv-gpu") then
+        add_deps("llaisys-device-nvidia")
+    end
+    
 
     set_languages("cxx17")
     set_warnings("all", "error")
@@ -85,6 +98,9 @@ target_end()
 target("llaisys-ops")
     set_kind("static")
     add_deps("llaisys-ops-cpu")
+    if has_config("nv-gpu") then
+        add_deps("llaisys-ops-nvidia")
+    end
 
     set_languages("cxx17")
     set_warnings("all", "error")
@@ -113,6 +129,7 @@ target("llaisys-models")
     -- 模型实现：C++ 后端
     add_files("src/models/qwen2/*.cpp")
 
+
     on_install(function (target) end)
 target_end()
 
@@ -134,7 +151,13 @@ target("llaisys")
     add_files("src/llaisys/*.cc", "src/llaisys/models/*.cc")
     set_installdir(".")
 
-    
+    if has_config("nv-gpu") then
+        -- link cuda runtime lib
+        add_links("cudart", "cublas")        
+      
+    end
+
+
     after_install(function (target)
         -- copy shared library to python package
         print("Copying llaisys to python/llaisys/libllaisys/ ..")
