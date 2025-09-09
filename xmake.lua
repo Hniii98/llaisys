@@ -49,7 +49,7 @@ target("llaisys-device")
     add_deps("llaisys-utils")
     add_deps("llaisys-device-cpu")
     if has_config("nv-gpu") then
-        add_deps("llaisys-device-nvidia")
+        add_deps("llaisys-device-nvidia", {public = true})
     end
     
 
@@ -99,7 +99,7 @@ target("llaisys-ops")
     set_kind("static")
     add_deps("llaisys-ops-cpu")
     if has_config("nv-gpu") then
-        add_deps("llaisys-ops-nvidia")
+        add_deps("llaisys-ops-nvidia", {public = true})
     end
 
     set_languages("cxx17")
@@ -157,6 +157,7 @@ target("llaisys")
       
     end
 
+    set_policy("build.cuda.devlink", true)
 
     after_install(function (target)
         -- copy shared library to python package
