@@ -34,6 +34,7 @@ static void alloc_weight_arrays(LlaisysQwen2Weights& w, size_t L) {
     }
     w.in_embed = w.out_embed = w.out_norm_w = nullptr;
 }
+
 static void free_weight_arrays_keep_tensors(LlaisysQwen2Weights& w) {
     delete[] w.attn_norm_w;  delete[] w.attn_q_w;   delete[] w.attn_q_b;
     delete[] w.attn_k_w;     delete[] w.attn_k_b;   delete[] w.attn_v_w;
@@ -44,6 +45,7 @@ static void free_weight_arrays_keep_tensors(LlaisysQwen2Weights& w) {
     w.attn_o_w = w.mlp_norm_w = w.mlp_gate_w = w.mlp_up_w = w.mlp_down_w = nullptr;
     w.in_embed = w.out_embed = w.out_norm_w = nullptr;
 }
+
 static void free_all_weights_and_tensors(LlaisysQwen2Weights& w, size_t L) {
     auto destroy = [](llaisysTensor_t t){ if (t) tensorDestroy(t); };
     if (w.attn_norm_w) for (size_t i=0;i<L;++i) destroy(w.attn_norm_w[i]);
@@ -73,6 +75,7 @@ static T read_scalar_from_tensor(const tensor_t& t) {
     }
     return v;
 }
+
 static inline size_t safe_dim(const tensor_t& t, size_t i) {
     const auto& s = t->shape();
     return (i < s.size()) ? s[i] : 0;
@@ -130,14 +133,8 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
     auto x = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
     ops::embedding(x, indices, in_embed);
 
-    // pos ids（带偏移）
-    // auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
-    // {
-    //     std::vector<int64_t> p(T);
-    //     for (size_t i=0;i<T;++i) p[i] = int64_t(pos_base + i);
-    //     pos_ids->load(p.data());
-    // }
     auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
+    
     {
         std::vector<int64_t> p(T);
         for (size_t i = 0; i < T; ++i) p[i] = static_cast<int64_t>(pos_base + i);

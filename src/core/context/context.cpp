@@ -14,7 +14,7 @@ Context::Context() {
 
     // Create runtimes for each device type.
     // Activate the first available device. If no other device is available, activate CPU runtime.
-    // Only first reached device type when _current_tunrime is nullptr will be initialized with Runtime,
+    // Only first reached device type  will be initialized with Runtime when _current_tunrime is nullptr,
     // the other device types are set nullptr.
     for (auto device_type : device_typs) {
         const LlaisysRuntimeAPI *api_ = llaisysGetRuntimeAPI(device_type);
@@ -63,7 +63,7 @@ void Context::setDevice(llaisysDeviceType_t device_type, int device_id) {
             runtimes[device_id] = new Runtime(device_type, device_id);
         }
         runtimes[device_id]->_activate();
-        _current_runtime = runtimes[device_id]; // TODO: fix this unreliable logic
+        _current_runtime = runtimes[device_id]; 
     }
 }
 

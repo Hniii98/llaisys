@@ -13,7 +13,7 @@ inline llaisysTensor_t to_c_handle(const tensor_t& t) {
 
 inline tensor_t borrow(llaisysTensor_t h) {
     if (!h) return nullptr;
-    auto* wrap = reinterpret_cast<LlaisysTensor*>(h);
+    auto* wrap = reinterpret_cast<LlaisysTensor*>(h); // 将不透明指针转换为真实定义才能取出智能指针
     return wrap->tensor;  // 不会释放底层 Tensor
 }
 
