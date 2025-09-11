@@ -4,6 +4,8 @@
 
 #include <cmath>
 
+namespace {
+
 template <typename T>
 void add_(T *c, const T *a, const T *b, size_t numel) {
     for (size_t i = 0; i < numel; i++) {
@@ -14,6 +16,10 @@ void add_(T *c, const T *a, const T *b, size_t numel) {
         }
     }
 }
+
+} // anomynous namespace
+
+
 
 namespace llaisys::ops::cpu {
 void add(std::byte *c, const std::byte *a, const std::byte *b, llaisysDataType_t type, size_t numel) {

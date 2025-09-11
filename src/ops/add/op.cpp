@@ -4,6 +4,7 @@
 #include "../../utils.hpp"
 
 #include "cpu/add_cpu.hpp"
+#include "nvidia/add_nvidia.cuh"
 
 namespace llaisys::ops {
 void add(tensor_t c, tensor_t a, tensor_t b) {
@@ -21,13 +22,15 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
     llaisys::core::context().setDevice(c->deviceType(), c->deviceId());
 
     switch (c->deviceType()) {
-    case LLAISYS_DEVICE_CPU:
-        return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
-#ifdef ENABLE_NVIDIA_API
-    case LLAISYS_DEVICE_NVIDIA:
-        TO_BE_IMPLEMENTED();
-        return;
-#endif
+    
+        // case LLAISYS_DEVICE_CPU:
+        //     return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
+        
+        
+    #ifdef ENABLE_NVIDIA_API
+        case LLAISYS_DEVICE_NVIDIA:
+            return nvidia::add(c->data(), a->data(), b->data(), c->dtype(), c->numel()); // dispatch stream inside.
+    #endif
     default:
         EXCEPTION_UNSUPPORTED_DEVICE;
     }
