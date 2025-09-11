@@ -23,8 +23,8 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
 
     switch (c->deviceType()) {
     
-        // case LLAISYS_DEVICE_CPU:
-        //     return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
+    case LLAISYS_DEVICE_CPU:
+        return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
         
         
     #ifdef ENABLE_NVIDIA_API

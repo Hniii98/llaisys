@@ -11,6 +11,9 @@
 #include "swiglu/op.hpp"
 
 
+#include <limits>
+
+
 namespace llaisys::ops::nvidia {
 	inline unsigned int safe_grid_size(size_t n, unsigned int block_size) {
     if (block_size == 0) {
