@@ -5,7 +5,13 @@
 #include <cstddef>
 
 namespace llaisys::ops::cpu {
-void embedding(std::byte *dst, const std::byte *src, llaisysDataType_t type, size_t numel);
+	
+void embedding(std::byte *out, 
+			   std::byte *index_list, 
+			   size_t list_length, 
+			   const std::byte *weight,
+			   size_t stride,
+			   llaisysDataType_t type);
 }
 
 
