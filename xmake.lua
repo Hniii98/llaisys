@@ -18,11 +18,18 @@ if has_config("nv-gpu") then
     add_defines("ENABLE_NVIDIA_API")
     if is_plat("windows") then
         add_includedirs("$(env CUDA_PATH)/include", {public = true})
+        add_includedirs("$(env CUDA_PATH)/include/cccl", {public = true})
         add_linkdirs("$(env CUDA_PATH)/lib/x64")
+
+        add_cuflags("-Xcompiler=/utf-8,/MD", {force = true})
+
+
     else
         add_includedirs("/usr/local/cuda/include", {public = true})
         add_linkdirs("/usr/local/cuda/lib64")
     end
+
+    
     includes("xmake/nvidia.lua")
 end
 
