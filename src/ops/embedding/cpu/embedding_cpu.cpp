@@ -9,7 +9,7 @@ namespace {
 
 template <typename T>
 void embedding_(T *out, 
-				int64_t *index_list, size_t list_length, 
+				const int64_t *index_list, size_t list_length, 
 				const T *weight, size_t stride, size_t dsize) {
 
 	for(size_t i = 0; i < list_length; i++) {
@@ -33,13 +33,13 @@ void embedding_(T *out,
 namespace llaisys::ops::cpu {
 
 void embedding(std::byte *out, 
-			   std::byte *index_list, size_t list_length, 
+			   const std::byte *index_list, size_t list_length, 
 			   const std::byte *weight, size_t stride,
 			   llaisysDataType_t type) {
 	switch (type) {
 		case LLAISYS_DTYPE_F32:	
 			return embedding_<float>(reinterpret_cast<float *>(out), 
-									 reinterpret_cast<int64_t *>(index_list), 
+									 reinterpret_cast<const int64_t *>(index_list), 
 									 list_length,
 									 reinterpret_cast<const float *>(weight),
 								     stride,
@@ -47,7 +47,7 @@ void embedding(std::byte *out,
 
 		case LLAISYS_DTYPE_BF16:
 			return embedding_<llaisys::bf16_t>(reinterpret_cast<llaisys::bf16_t *>(out), 
-											   reinterpret_cast<int64_t *>(index_list), 
+											   reinterpret_cast<const int64_t *>(index_list), 
 											   list_length,
 											   reinterpret_cast<const llaisys::bf16_t *>(weight),
 											   stride,
@@ -55,7 +55,7 @@ void embedding(std::byte *out,
 			
 		case LLAISYS_DTYPE_F16:
 			return embedding_<llaisys::fp16_t>(reinterpret_cast<llaisys::fp16_t *>(out), 
-											   reinterpret_cast<int64_t *>(index_list), 
+											   reinterpret_cast<const int64_t *>(index_list), 
 											   list_length,
 											   reinterpret_cast<const llaisys::fp16_t *>(weight),
 											   stride,

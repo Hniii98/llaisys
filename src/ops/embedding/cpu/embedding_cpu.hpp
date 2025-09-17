@@ -7,7 +7,7 @@
 namespace llaisys::ops::cpu {
 	
 void embedding(std::byte *out, 
-			   std::byte *index_list, 
+			   const std::byte *index_list, 
 			   size_t list_length, 
 			   const std::byte *weight,
 			   size_t stride,
