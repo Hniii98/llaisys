@@ -3,6 +3,8 @@
 #include <string>
 #include <cuda_runtime.h>
 #include <system_error>
+#include <limits>
+
 
 
 namespace llaisys::device::nvidia::utils {
@@ -48,3 +50,19 @@ inline void throwCudaError(cudaError_t err, const char *file, int line) {
             ::llaisys::device::nvidia::utils::throwCudaError(err__, __FILE__, __LINE__); \
         } \
     } while (0)
+
+
+inline unsigned int safe_grid_size(size_t n, unsigned int block_size) {
+    if (block_size == 0) {
+        throw std::invalid_argument("block_size must be > 0");
+    }
+
+    size_t grid_size = (n + block_size - 1) / block_size;
+
+    if (grid_size > std::numeric_limits<unsigned int>::max()) {
+        throw std::runtime_error("Grid size exceeds CUDA limit (unsigned int max)");
+    }
+
+    return static_cast<unsigned int>(grid_size);    
+}
+

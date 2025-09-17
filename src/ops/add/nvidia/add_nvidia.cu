@@ -1,12 +1,14 @@
 #include "add_nvidia.cuh"
 #include "../../../core/llaisys_core.hpp"
 #include "../../../utils.hpp"
+#include "../../../device/nvidia/utils.cuh"
+
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
 
 #include <stdexcept>
-#include "../../ops.hpp"
+
 
 namespace {
 
@@ -15,6 +17,7 @@ struct add_t {
   __device__ T operator()(T x, T y) const { return x + y; }
 };
 
+// TOOD: bf16 and fp16 vectorize
 template<>
 struct add_t<__half> {
   __device__ __half operator()(__half x, __half y) const { return __hadd(x, y); }
@@ -42,7 +45,7 @@ void add(std::byte* c, const std::byte* a, const std::byte* b,
   auto s = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
 
 
-  dim3 block(256), grid(safe_grid_size(n, block.x));; // ceil division
+  dim3 block(256), grid(safe_grid_size(n, block.x)); // ceil division
 
   switch (type) {
     case LLAISYS_DTYPE_F32: {
