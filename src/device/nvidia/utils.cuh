@@ -5,6 +5,8 @@
 #include <system_error>
 #include <limits>
 
+#include <cublas_v2.h>   
+
 
 
 namespace llaisys::device::nvidia::utils {
@@ -37,8 +39,24 @@ inline void throwCudaError(cudaError_t err, const char *file, int line) {
 }
 
 
+inline const std::error_category& cublasErrorCategory() noexcept {
+    static struct : std::error_category {
+        const char* name() const noexcept override { return "cublas"; }
+        std::string message(int ev) const override {
+            return cublasGetStatusString(static_cast<cublasStatus_t>(ev));
+        }
+    } category;
+    return category;
+}
 
+inline std::error_code makeCublasErrorCode(cublasStatus_t s) noexcept {
+    return std::error_code(static_cast<int>(s), cublasErrorCategory());
+}
 
+inline void throwCublasError(cublasStatus_t s, const char* file, int line) {
+    throw std::system_error(makeCublasErrorCode(s),
+                            std::string(file ? file : "??") + ":" + std::to_string(line));
+}
 
 } // namespace llaisys::device::nvidia::utils
 
@@ -48,6 +66,14 @@ inline void throwCudaError(cudaError_t err, const char *file, int line) {
         cudaError_t err__ = (expr); \
         if (err__ != cudaSuccess)  { \
             ::llaisys::device::nvidia::utils::throwCudaError(err__, __FILE__, __LINE__); \
+        } \
+    } while (0)
+
+#define CHECK_CUBLAS(expr) \
+    do { \
+        cublasStatus_t st__ = (expr); \
+        if (st__ != CUBLAS_STATUS_SUCCESS) { \
+            ::llaisys::device::nvidia::utils::throwCublasError(st__, __FILE__, __LINE__); \
         } \
     } while (0)
 
