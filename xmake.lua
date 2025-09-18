@@ -18,8 +18,8 @@ if has_config("nv-gpu") then
     add_defines("ENABLE_NVIDIA_API")
     if is_plat("windows") then
         add_includedirs("$(env CUDA_PATH)/include", {public = true})
-        add_includedirs("$(env CUDA_PATH)/include/cccl", {public = true})
-        add_linkdirs("$(env CUDA_PATH)/lib/x64")
+        --add_includedirs("$(env CUDA_PATH)/include/cccl", {public = true})
+        --add_linkdirs("$(env CUDA_PATH)/lib/x64")
 
         add_cuflags("-Xcompiler=/utf-8,/MD", {force = true})
 
@@ -160,7 +160,7 @@ target("llaisys")
 
     if has_config("nv-gpu") then
         -- link cuda runtime lib
-        add_links("cudart", "cublas")        
+        add_links( "cublas")        
       
     end
 
@@ -169,8 +169,14 @@ target("llaisys")
     after_install(function (target)
         -- copy shared library to python package
         print("Copying llaisys to python/llaisys/libllaisys/ ..")
+        local cudabin = path.join(os.getenv("CUDA_PATH"), "bin/x64")
         if is_plat("windows") then
             os.cp("bin/*.dll", "python/llaisys/libllaisys/")
+
+            os.cp(path.join(cudabin, "cublas64_13.dll"),   "python/llaisys/libllaisys/")
+            os.cp(path.join(cudabin, "cublasLt64_13.dll"),   "python/llaisys/libllaisys/")
+
+
         end
         if is_plat("linux") then
             os.cp("lib/*.so", "python/llaisys/libllaisys/")
