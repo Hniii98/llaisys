@@ -35,39 +35,39 @@ void embedding(std::byte *out,
                const std::byte *weight, size_t stride,
                llaisysDataType_t type) {
     auto s = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
-    dim3 block(256), grid(list_length);
+    dim3 block(256), grid(static_cast<unsigned>(list_length));
 
     switch (type) {
-    case LLAISYS_DTYPE_F32: {
-        embedding_kernel<float><<<grid, block, 0, s>>>(
-            reinterpret_cast<float*>(out),
-            reinterpret_cast<const int64_t*>(index_list),
-            reinterpret_cast<const float*>(weight),
-            stride,
-            list_length);
-        break;
-    }
-    case LLAISYS_DTYPE_F16: {
-        embedding_kernel<__half><<<grid, block, 0, s>>>(
-            reinterpret_cast<__half*>(out),
-            reinterpret_cast<const int64_t*>(index_list),
-            reinterpret_cast<const __half*>(weight),
-            stride,
-            list_length);
-        break;
-    }
-    case LLAISYS_DTYPE_BF16: {
-        embedding_kernel<__nv_bfloat16><<<grid, block, 0, s>>>(
-            reinterpret_cast<__nv_bfloat16*>(out),
-            reinterpret_cast<const int64_t*>(index_list),
-            reinterpret_cast<const __nv_bfloat16*>(weight),
-            stride,
-            list_length);
-        break;
-    }
-    default:
-        EXCEPTION_UNSUPPORTED_DATATYPE(type);
-    }
+        case LLAISYS_DTYPE_F32: {
+            embedding_kernel<float><<<grid, block, 0, s>>>(
+                reinterpret_cast<float*>(out),
+                reinterpret_cast<const int64_t*>(index_list),
+                reinterpret_cast<const float*>(weight),
+                stride,
+                list_length);
+            break;
+        }
+        case LLAISYS_DTYPE_F16: {
+            embedding_kernel<__half><<<grid, block, 0, s>>>(
+                reinterpret_cast<__half*>(out),
+                reinterpret_cast<const int64_t*>(index_list),
+                reinterpret_cast<const __half*>(weight),
+                stride,
+                list_length);
+            break;
+        }
+        case LLAISYS_DTYPE_BF16: {
+            embedding_kernel<__nv_bfloat16><<<grid, block, 0, s>>>(
+                reinterpret_cast<__nv_bfloat16*>(out),
+                reinterpret_cast<const int64_t*>(index_list),
+                reinterpret_cast<const __nv_bfloat16*>(weight),
+                stride,
+                list_length);
+            break;
+        }
+        default:
+            EXCEPTION_UNSUPPORTED_DATATYPE(type);
+        }
 }
 
 
