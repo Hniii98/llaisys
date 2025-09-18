@@ -34,16 +34,8 @@ void embedding(std::byte *out,
                const std::byte *index_list, size_t list_length,
                const std::byte *weight, size_t stride,
                llaisysDataType_t type) {
-    int device_id = llaisys::core::context().runtime().deviceId();
     auto s = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
-
-    cudaDeviceProp prop;
-    CHECK_CUDA(cudaGetDeviceProperties(&prop, device_id));
-    unsigned int grid_limit = prop.maxGridSize[0];
-    unsigned int grid_size = std::min<unsigned int>(
-        static_cast<unsigned int>(list_length),
-        grid_limit);
-    dim3 block(256), grid(grid_size);
+    dim3 block(256), grid(list_length);
 
     switch (type) {
     case LLAISYS_DTYPE_F32: {
