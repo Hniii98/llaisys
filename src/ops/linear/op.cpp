@@ -4,17 +4,28 @@
 
 namespace llaisys::ops {
 void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
-     if (bias) {
-        CHECK_SAME_DEVICE(out, in, weight, bias);
-    } else {
-        CHECK_SAME_DEVICE(out, in, weight);
-    }
-    
-    ASSERT(out->isContiguous() && in->isContiguous() & weight->isContiguous(), 
-           "Linear: all input should be contiguous.");
+    /*
+        Currently, only 2D input, output, and weight matrices are supported. 
+        The weight matrix is assumed to be untransposed. 
+        The bias term is optional, and no broadcasting is applied in the computation.
+    */
 
-      // always suport cpu caculation
+    CHECK_SAME_SHAPE(in->shape()[1], weight->shape()[1]); // eg. [a, b] * [c, d], b must equal to d while 
+                                                         // [c, d] is untransposed.
+    CHECK_SAME_DEVICE(out, in, weight);                   
+    CHECK_SAME_DTYPE(out->dtype(), in->dtype(), weight->dtype());
+    ASSERT(out->isContiguous() && in->isContiguous() & weight->isContiguous(), 
+        "Linear: all input should be contiguous.");   
+                                                          
+    if (bias) {
+        CHECK_SAME_DEVICE(in, bias);
+        CHECK_SAME_DTYPE(in->dtype(), bias->dtype());
+        ASSERT(bias->isContiguous(), "Linear: all input should be contiguous.");
+    } 
+
+    // always suport cpu caculation
     if (in->deviceType() == LLAISYS_DEVICE_CPU) {
+        
         cpu::linear(out, in, weight, bias);  
         return;   
     }
