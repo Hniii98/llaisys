@@ -6,118 +6,88 @@
 #include <cmath>
 #include <cstring>
 
-/* Elementwise mutiply */
+namespace {
+
 template <typename T>
-void mul_(T *c, const T *a, const T *b, size_t numel) {
-	for (size_t i = 0; i < numel; i++) {
-		if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-            c[i] = llaisys::utils::cast<T>(llaisys::utils::cast<float>(a[i]) * llaisys::utils::cast<float>(b[i]));
-        } else {
-            c[i] = a[i] * b[i];
-        }
-	}
-	
-}
+void linear_(T *out, const T *in, const T *weight, const T *bias, 
+			 size_t sequence_length, size_t embedding_dim, size_t features_dim) {
 
+	for (size_t i = 0; i < sequence_length; i++) { 
+		for (size_t j = 0; j < features_dim; j++) {
+			float sum_temp = 0.0f; // all data type sum up in float
+			for (size_t k = 0; k < embedding_dim; k++) {
+				float in_val, w_val;
 
-namespace llaisys::ops::cpu {
-	
-	void mul(std::byte *c, const std::byte *a, const std::byte	*b, llaisysDataType_t type, size_t numel) {
-		switch (type) {
-			case LLAISYS_DTYPE_F32:
-        		return mul_(reinterpret_cast<float *>(c), reinterpret_cast<const float *>(a), reinterpret_cast<const float *>(b), numel);
-    		case LLAISYS_DTYPE_BF16:
-        		return mul_(reinterpret_cast<llaisys::bf16_t *>(c), reinterpret_cast<const llaisys::bf16_t *>(a),
-                    		reinterpret_cast<const llaisys::bf16_t *>(b), numel);
-    		case LLAISYS_DTYPE_F16:
-        		return mul_(reinterpret_cast<llaisys::fp16_t *>(c), reinterpret_cast<const llaisys::fp16_t *>(a),
-                    		reinterpret_cast<const llaisys::fp16_t *>(b), numel);
-    		default:
-        		EXCEPTION_UNSUPPORTED_DATATYPE(type);
-		}
-		
-    }
+				if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+					in_val = llaisys::utils::cast<float>(in[i * embedding_dim + k]);
+					w_val  = llaisys::utils::cast<float>(weight[j * embedding_dim + k]); // transpose by hand
+				} else {
+					in_val = static_cast<float>(in[i * embedding_dim + k]);
+					w_val  = static_cast<float>(weight[j * embedding_dim + k]);         // transpose by hand
+				}
 
-	template <typename T>
-		void linear_(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
-			/*
-				in:      [N, D_in]
-				weight:  [D_out, D_in]
-				out:     [N, D_out]
-				bias:    [D_out] (optional)
-			*/
-			size_t N = in->shape()[0];
-			size_t D_in = in->shape()[1];
-			size_t D_out = weight->shape()[0];  // 注意这里是 weight 的第 0 维
+				sum_temp += in_val * w_val;
+			}
 
-			const T* in_data = reinterpret_cast<const T*>(in->data());
-			const T* weight_data = reinterpret_cast<const T*>(weight->data());
-			T* out_data = reinterpret_cast<T*>(out->data());
-			const T* bias_data = bias ? reinterpret_cast<const T*>(bias->data()) : nullptr;
+			if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+				out[i * features_dim + j] = llaisys::utils::cast<T>(sum_temp);
+			} else {
+				out[i * features_dim + j] = static_cast<T>(sum_temp);
+			}
 
-			for (size_t i = 0; i < N; i++) {
-				for (size_t j = 0; j < D_out; j++) {
-					float sum = 0.0f;
-					for (size_t k = 0; k < D_in; k++) {
-						float in_val, w_val;
-
-						if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-							in_val = llaisys::utils::cast<float>(in_data[i * D_in + k]);
-							w_val  = llaisys::utils::cast<float>(weight_data[j * D_in + k]); // transpose by hand
-						} else {
-							in_val = static_cast<float>(in_data[i * D_in + k]);
-							w_val  = static_cast<float>(weight_data[j * D_in + k]);         // transpose by hand
-						}
-
-						sum += in_val * w_val;
-					}
-
-					if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-						out_data[i * D_out + j] = llaisys::utils::cast<T>(sum);
-					} else {
-						out_data[i * D_out + j] = static_cast<T>(sum);
-					}
-
-					if (bias_data) {
-						if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-							float bias_val = llaisys::utils::cast<float>(bias_data[j]);
-							float out_val  = llaisys::utils::cast<float>(out_data[i * D_out + j]);
-							out_data[i * D_out + j] = llaisys::utils::cast<T>(out_val + bias_val);
-						} else {
-							out_data[i * D_out + j] += bias_data[j];
-						}
-					}
+			if (bias) {
+				if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
+					float bias_val = llaisys::utils::cast<float>(bias[j]);
+					float out_val  = llaisys::utils::cast<float>(out[i * features_dim + j]);
+					out[i * features_dim + j] = llaisys::utils::cast<T>(out_val + bias_val);
+				} else {
+					out[i * features_dim + j] += bias[j];
 				}
 			}
 		}
-
-
-
-	
-	void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
-		// if (bias) {
-		// 	std::cerr << "[CHECK][linear] in=(" << in->shape()[0] << "," << in->shape()[1] << ") "
-		// 		<< "weight=(" << weight->shape()[0] << "," << weight->shape()[1] << ") "
-		// 		<< "out=(" << out->shape()[0] << "," << out->shape()[1] << ")"
-		// 		<< "bias=(" << bias->shape()[0] << "," << bias->shape()[1] << ")"
-		// 		<< std::endl;
-		// } else {
-		// 	std::cerr << "[CHECK][linear] in=(" << in->shape()[0] << "," << in->shape()[1] << ") "
-		// 		<< "weight=(" << weight->shape()[0] << "," << weight->shape()[1] << ") "
-		// 		<< "out=(" << out->shape()[0] << "," << out->shape()[1] << ")"
-		// 		<< std::endl;
-		// }
-		switch (in->dtype()) {
-		case LLAISYS_DTYPE_F32:
-			return linear_<float>(out, in, weight, bias);
-    	case LLAISYS_DTYPE_BF16:
-			return linear_<llaisys::bf16_t>(out, in, weight, bias);
-    	case LLAISYS_DTYPE_F16:
-        	return linear_<llaisys::fp16_t>(out, in, weight, bias);
-    	default:
-        	EXCEPTION_UNSUPPORTED_DATATYPE(in->dtype());
-			
-		}
-		
 	}
 }
+
+template <typename T>
+void linear_dispatch(std::byte *out, const std::byte *in, 
+					 const std::byte *weight, const std::byte *bias,
+					 size_t sequence_length, size_t embedding_dim, size_t features_dim) {
+    linear_<T>(reinterpret_cast<T*>(out),
+               reinterpret_cast<const T*>(in),
+               reinterpret_cast<const T*>(weight),
+               reinterpret_cast<const T*>(bias),
+               sequence_length, 
+			   embedding_dim, 
+			   features_dim);
+}
+
+
+} // anomynous namespace
+
+
+namespace llaisys::ops::cpu {
+
+
+void linear(std::byte *out, const std::byte *in, 
+			const std::byte *weight, const std::byte *bias, 
+			size_t sequence_length, size_t embedding_dim, size_t features_dim, 
+			llaisysDataType_t type) {
+	/*
+		in:      [sequence_length, embedding_dim]
+		weight:  [features_dim, embedding_dim]
+		out:     [sequence_length, features_dim]
+		bias:    [features_dim] (optional)
+	*/
+	switch (type) {
+		case LLAISYS_DTYPE_F32:  
+			return linear_dispatch<float>(out, in, weight, bias, sequence_length, embedding_dim, features_dim);
+		case LLAISYS_DTYPE_BF16: 
+			return linear_dispatch<llaisys::bf16_t>(out, in, weight, bias, sequence_length, embedding_dim, features_dim);
+		case LLAISYS_DTYPE_F16:  
+			return linear_dispatch<llaisys::fp16_t>(out, in, weight, bias, sequence_length, embedding_dim, features_dim);
+		default: 
+			EXCEPTION_UNSUPPORTED_DATATYPE(type);
+	}
+	
+}
+} // namespace llaisys::ops::cpu

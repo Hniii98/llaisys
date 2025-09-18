@@ -23,11 +23,17 @@ void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
         ASSERT(bias->isContiguous(), "Linear: all input should be contiguous.");
     } 
 
+
     // always suport cpu caculation
     if (in->deviceType() == LLAISYS_DEVICE_CPU) {
-        
-        cpu::linear(out, in, weight, bias);  
-        return;   
+        if(bias) {
+            return cpu::linear(out->data(), in->data(), weight->data(), bias->data(), 
+                               in->shape()[0], in->shape()[1], out->shape()[1], out->dtype()); 
+        } else {
+            return cpu::linear(out->data(), in->data(), weight->data(), nullptr, 
+                               in->shape()[0], in->shape()[1], out->shape()[1], out->dtype());
+        }
+     
     }
     
     llaisys::core::context().setDevice(out->deviceType(), out->deviceId());
@@ -35,8 +41,13 @@ void linear(tensor_t out, tensor_t in, tensor_t weight, tensor_t bias) {
 
     switch (out->deviceType()) {
     case LLAISYS_DEVICE_CPU:   
-        return cpu::linear(out, in, weight, bias);    
-
+        if(bias) {
+            return cpu::linear(out->data(), in->data(), weight->data(), bias->data(), 
+                               in->shape()[0], in->shape()[1], out->shape()[1], out->dtype()); 
+        } else {
+            return cpu::linear(out->data(), in->data(), weight->data(), nullptr, 
+                               in->shape()[0], in->shape()[1], out->shape()[1], out->dtype());
+        }   
 #ifdef ENABLE_NVIDIA_API
     case LLAISYS_DEVICE_NVIDIA:
         TO_BE_IMPLEMENTED();
