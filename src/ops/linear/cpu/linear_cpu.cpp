@@ -1,4 +1,4 @@
-#include "cpu_linear.hpp"
+#include "linear_cpu.hpp"
 
 #include "../../../utils.hpp"
 #include "../../add/cpu/add_cpu.hpp"
