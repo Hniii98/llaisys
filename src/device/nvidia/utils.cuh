@@ -58,6 +58,24 @@ inline void throwCublasError(cublasStatus_t s, const char* file, int line) {
                             std::string(file ? file : "??") + ":" + std::to_string(line));
 }
 
+template<typename T>
+__device__ __host__ float load_as_float(const T* p) {
+    if constexpr (std::is_same_v<T, __half>)        return __half2float(*p);
+    if constexpr (std::is_same_v<T, __nv_bfloat16>) return __bfloat162float(*p);
+    return *p; // float
+}
+
+template<typename T>
+__device__ __host__ inline void store_from_float(T* p, float v) {
+    if constexpr (std::is_same_v<T, __half>)        { *p = __float2half(v); return; }
+    if constexpr (std::is_same_v<T, __nv_bfloat16>) { *p = __float2bfloat16(v); return; }
+    *p = v; // float
+}
+
+
+
+
+
 } // namespace llaisys::device::nvidia::utils
 
 

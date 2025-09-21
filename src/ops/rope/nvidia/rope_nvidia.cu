@@ -3,31 +3,33 @@
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
+#include "../../../device/nvidia/utils.cuh"
 
 
 namespace {
 
-template<typename T>
-__device__ inline float load_as_float(const T* p) {
-    if constexpr (std::is_same_v<T, __half>)        return __half2float(*p);
-    if constexpr (std::is_same_v<T, __nv_bfloat16>) return __bfloat162float(*p);
-    return *p; // float
-}
+// template<typename T>
+// __device__ inline float load_as_float(const T* p) {
+//     if constexpr (std::is_same_v<T, __half>)        return __half2float(*p);
+//     if constexpr (std::is_same_v<T, __nv_bfloat16>) return __bfloat162float(*p);
+//     return *p; // float
+// }
 
-template<typename T>
-__device__ inline void store_from_float(T* p, float v) {
-    if constexpr (std::is_same_v<T, __half>)        { *p = __float2half(v); return; }
-    if constexpr (std::is_same_v<T, __nv_bfloat16>) { *p = __float2bfloat16(v); return; }
-    *p = v; // float
-}
+// template<typename T>
+// __device__ inline void store_from_float(T* p, float v) {
+//     if constexpr (std::is_same_v<T, __half>)        { *p = __float2half(v); return; }
+//     if constexpr (std::is_same_v<T, __nv_bfloat16>) { *p = __float2bfloat16(v); return; }
+//     *p = v; // float
+// }
 
 // TODO: divide pow(theta,−2k/d) into exp((−2lntheta)/d​)*k)
 template<typename T>
 __global__ void rope_kernel(T *out, const T *in, const int64_t *pos_ids, float theta, 
 				size_t sequence_length, size_t num_heads, size_t embedding_dim) {
+	using llaisys::device::nvidia::utils::load_as_float;
+	using llaisys::device::nvidia::utils::store_from_float;
 	// since gridDim.x can be very large, we ignore it's stride here.
-	// gridDim.x could be used as sequence length safely. 
-				
+	// gridDim.x could be used as sequence length safely. 			
 	size_t sequence_index = blockIdx.x;
 	if (sequence_index >= sequence_length) return;
 
@@ -88,18 +90,19 @@ namespace llaisys::ops::nvidia {
 void rope(std::byte *out, const std::byte *in, const std::byte *pos_ids, float theta,
 		  llaisysDataType_t type, size_t sequence_length, size_t num_heads, size_t embedding_dim) {
 
-	   switch (type) {
-        case LLAISYS_DTYPE_F32:
-            rope_dispatch<float>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
-            break;
-        case LLAISYS_DTYPE_F16:
-            rope_dispatch<__half>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
-            break;
-        case LLAISYS_DTYPE_BF16:
-            rope_dispatch<__nv_bfloat16>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
-            break;
-        default:
-            EXCEPTION_UNSUPPORTED_DATATYPE(type);
-    }
+	switch (type) {
+		case LLAISYS_DTYPE_F32:
+			rope_dispatch<float>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
+			break;
+		case LLAISYS_DTYPE_F16:
+			rope_dispatch<__half>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
+			break;
+		case LLAISYS_DTYPE_BF16:
+			rope_dispatch<__nv_bfloat16>(out, in, pos_ids, theta, sequence_length, num_heads, embedding_dim);
+			break;
+		default:
+			EXCEPTION_UNSUPPORTED_DATATYPE(type);			
+	}
 }
-}
+
+} // namespace llaisys::ops::nvidia
