@@ -17,12 +17,11 @@ void rope_(T *out, const T *in, const int64_t *pos_ids, float theta, size_t seql
 				
 				// if do this: float inv_freq  = 1.0 / std::pow(theta, (2.0f * k) / d);
 				// may loss accuracy twice, once in 2.0f * k /d, once in pow.
-
 				double exponent = -2.0 * k / d;           
 				double inv_freq = std::pow(static_cast<double>(theta), exponent);
-				float angle = static_cast<float>(pos * inv_freq);
-				float cos_theta = std::cos(angle);
-				float sin_theta = std::sin(angle);
+				float angle = static_cast<float>(static_cast<double>(pos) * inv_freq);
+				float cos_angle = std::cos(angle);
+				float sin_angle = std::sin(angle);
 				// calculate offset of a and b
 				size_t a_offset = i * nhead * d + j * d + k;
 				size_t b_offset = i * nhead * d + j * d + k + d / 2;
@@ -39,8 +38,8 @@ void rope_(T *out, const T *in, const int64_t *pos_ids, float theta, size_t seql
 				}
 				
 				// calculate a_prime and b_prime
-				float a_prime = a * cos_theta - b * sin_theta;
-				float b_prime = a * sin_theta + b * cos_theta;
+				float a_prime = a * cos_angle - b * sin_angle;
+				float b_prime = a * sin_angle + b * cos_angle;
 
 				// write to out matrix
 				if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
