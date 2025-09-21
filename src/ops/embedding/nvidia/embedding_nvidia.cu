@@ -1,5 +1,5 @@
 #include "llaisys.h"
-#include "../../ops.hpp"
+#include "../../../core/llaisys_core.hpp"
 #include "../../../device/nvidia/utils.cuh"
 
 #include <cuda_runtime.h>
