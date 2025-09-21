@@ -5,6 +5,7 @@
 #include "../../utils.hpp"
 
 #include "cpu/rms_norm_cpu.hpp"
+#include "nvidia/rms_norm_nvidia.cuh"
 
 namespace llaisys::ops {
 void rms_norm(tensor_t out, tensor_t in, tensor_t weight, float eps) {
@@ -15,11 +16,13 @@ void rms_norm(tensor_t out, tensor_t in, tensor_t weight, float eps) {
     ASSERT(out->isContiguous() && weight->isContiguous() && in->isContiguous(), 
             "RMSNorm: all input should be contiguous.");
 
-    size_t N = in->shape()[0], D = in->shape()[1];
+    size_t sequence_length = in->shape()[0], embedding_dim = in->shape()[1];
+    ASSERT(embedding_dim == weight->shape()[0],  
+            "RMSNorm: embedding dimension should be same as weight dimension.");
 
     if(out->deviceType() == LLAISYS_DEVICE_CPU) {
         return cpu::rms_norm(out->data(), in->data(), weight->data(), out->dtype(),
-                             N, D, eps);
+                             sequence_length, embedding_dim, eps);
     }
 
     llaisys::core::context().setDevice(out->deviceType(), out->deviceId());
@@ -27,11 +30,11 @@ void rms_norm(tensor_t out, tensor_t in, tensor_t weight, float eps) {
     switch (out->deviceType()) {
         case LLAISYS_DEVICE_CPU:
             return cpu::rms_norm(out->data(), in->data(), weight->data(), out->dtype(),
-                                N, D, eps);
+                                 sequence_length, embedding_dim, eps);
 #ifdef ENABLE_NVIDIA_API
         case LLAISYS_DEVICE_NVIDIA:
-            TO_BE_IMPLEMENTED();
-            return;
+            return nvidia::rms_norm(out->data(), in->data(), weight->data(), out->dtype(),
+                                  sequence_length, embedding_dim, eps);
 #endif
         default:
             EXCEPTION_UNSUPPORTED_DEVICE;
