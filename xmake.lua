@@ -155,7 +155,7 @@ target("llaisys")
 
     set_languages("cxx17")
     set_warnings("all", "error")
-    add_files("src/llaisys/*.cc", "src/llaisys/models/*.cc")
+    add_files("src/llaisys/*.cc")
     set_installdir(".")
 
     if has_config("nv-gpu") then
@@ -169,17 +169,28 @@ target("llaisys")
     after_install(function (target)
         -- copy shared library to python package
         print("Copying llaisys to python/llaisys/libllaisys/ ..")
-        local cudabin = path.join(os.getenv("CUDA_PATH"), "bin/x64")
         if is_plat("windows") then
             os.cp("bin/*.dll", "python/llaisys/libllaisys/")
-
-            os.cp(path.join(cudabin, "cublas64_13.dll"),   "python/llaisys/libllaisys/")
-            os.cp(path.join(cudabin, "cublasLt64_13.dll"),   "python/llaisys/libllaisys/")
-
-
         end
         if is_plat("linux") then
             os.cp("lib/*.so", "python/llaisys/libllaisys/")
+        end
+    
+
+        if has_config("nv-gpu") then
+            -- link cuda lib
+            if is_plat("windows") then
+                local cuda_path = os.getenv("CUDA_PATH")
+                if cuda_path and os.exists(cuda_path) then
+                    local cudabin = path.join(cuda_path, "bin/x64")
+                    os.trycp(path.join(cudabin, "cublas64_13.dll"),   "python/llaisys/libllaisys/")
+                    os.trycp(path.join(cudabin, "cublasLt64_13.dll"), "python/llaisys/libllaisys/")
+                else
+                    print("nv-gpu enabled but CUDA_PATH is not set or CUDA tool kit is not equal to  13.0.")
+                end
+            elseif is_plat("linux") then
+                -- linux
+            end
         end
     end)
 target_end()
