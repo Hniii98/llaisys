@@ -130,9 +130,7 @@ target("llaisys-models")
     if not is_plat("windows") then
         add_cxflags("-fPIC", "-Wno-unknown-pragmas")
     end
-
-    -- 胶水：C API 实现（注意是 src/llaisys/models/ 目录）
-    add_files("src/llaisys/models/*.cc")
+    
     -- 模型实现：C++ 后端
     add_files("src/models/qwen2/*.cpp")
 
@@ -156,6 +154,8 @@ target("llaisys")
     set_languages("cxx17")
     set_warnings("all", "error")
     add_files("src/llaisys/*.cc")
+    -- 胶水：C API 实现
+    add_files("src/llaisys/models/*.cc")
     set_installdir(".")
 
     if has_config("nv-gpu") then
