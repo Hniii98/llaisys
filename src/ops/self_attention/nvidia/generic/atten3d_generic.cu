@@ -1,5 +1,6 @@
-#include "self_attention_kernels.cuh"
-#include "../../../device/nvidia/utils.cuh"
+#include "atten3d_generic.cuh"
+
+#include "../../../../device/nvidia/utils.cuh"
 #include <cub/cub.cuh>
 #include <math_constants.h>
 #include <cuda_runtime.h>
@@ -115,13 +116,15 @@ __global__ void atten3d_generic_kernel(
 
 // 显式实例化
 template __global__ void atten3d_generic_kernel<float, 256>(
-    float*, const float*, const float*, const float*, float*, float,
-    size_t, size_t, size_t, size_t, int);
+    float*, const float*, const float*, const float*, float*,
+    float, size_t, size_t, size_t, size_t, int);
+
 template __global__ void atten3d_generic_kernel<__half, 256>(
-    __half*, const __half*, const __half*, const __half*, float*, float,
-    size_t, size_t, size_t, size_t, int);
+    __half*, const __half*, const __half*, const __half*, float*,
+    float, size_t, size_t, size_t, size_t, int);
+
 template __global__ void atten3d_generic_kernel<__nv_bfloat16, 256>(
-    __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*,
-    float*, float, size_t, size_t, size_t, size_t, int);
+    __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, float*,
+    float, size_t, size_t, size_t, size_t, int);
 
 } // namespace llaisys::ops::nvidia::kernels

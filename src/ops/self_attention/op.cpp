@@ -1,13 +1,14 @@
 #include "op.hpp"
 
 #include "cpu/self_attention_cpu.hpp"
+#include "nvidia/self_attention_nvidia.cuh"
 
 namespace llaisys::ops {
 void self_attention(tensor_t attn_val, tensor_t q, tensor_t k, tensor_t v, float scale) {
     CHECK_SAME_DEVICE(q, k, v, attn_val);
     // Only support contiguous inputs with same shape for now. 
     CHECK_SAME_DTYPE(q->dtype(), k->dtype(), v->dtype());
-    ASSERT(q->isContiguous() && k->isContiguous() && v->isContiguous() && attn_val, 
+    ASSERT(q->isContiguous() && k->isContiguous() && v->isContiguous() && attn_val->isContiguous(), 
            "Self_Attention: all tensors must be contiguous.");
     ASSERT((q->ndim() == k->ndim()) && (k->ndim() == v->ndim()) && (q->ndim() == 3), "Self_Attention: Q K V should own 3 dimensions.");
     
@@ -21,7 +22,6 @@ void self_attention(tensor_t attn_val, tensor_t q, tensor_t k, tensor_t v, float
     nkvhead may isn't equal to n head when doing GQA
     */
     
-
     size_t seq_len = q->shape()[0];
     size_t nhead = q->shape()[1]; 
     size_t d = q->shape()[2];
@@ -44,8 +44,8 @@ void self_attention(tensor_t attn_val, tensor_t q, tensor_t k, tensor_t v, float
                                     seq_len, nhead, d, total_len, nkvhead, dv);
 #ifdef ENABLE_NVIDIA_API
     case LLAISYS_DEVICE_NVIDIA:
-        TO_BE_IMPLEMENTED();
-        return;
+        return nvidia::self_attention(attn_val->data(), q->data(), k->data(), v->data(), scale, attn_val->dtype(),
+                                    seq_len, nhead, d, total_len, nkvhead, dv);
 #endif
     default:
         EXCEPTION_UNSUPPORTED_DEVICE;

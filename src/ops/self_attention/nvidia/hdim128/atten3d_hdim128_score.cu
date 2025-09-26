@@ -1,5 +1,5 @@
-#include "self_attention_kernels.cuh"
-#include "../../../device/nvidia/utils.cuh"
+#include "../self_attention_kernels.cuh"
+#include "../../../../device/nvidia/utils.cuh"
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
 #include <math_constants.h>
@@ -10,10 +10,9 @@
 
 namespace llaisys::ops::nvidia::kernels {
 
-// naive self attention implementation for qwen2 1.5B of 128 hidden dimension
+
 template<typename T>
-__global__ void naive_atten3d_hdim128_kernel(
-    T *atten_val,  /* [seqlen, nhead, d=128] */
+__global__ void atten3d_hdim128_score_kernel(
     const T *q,    /* [seqlen, nhead, d=128] */
     const T *k,    /* [total_len, nkvhead, d=128] */
     const T *v,    /* [total_len, nkvhead, d=128] */
@@ -72,7 +71,7 @@ __global__ void naive_atten3d_hdim128_kernel(
         local_max = fmaxf(local_max, score_vec[i]);
     }
     float max_score = BlockReduce(temp_storage).Reduce(local_max, thrust::maximum<float>());
-    __syncthreads();
+    
 
     // 广播 max_score
     __shared__ float shared_max_score;
@@ -100,31 +99,20 @@ __global__ void naive_atten3d_hdim128_kernel(
             score_vec[i] = 0.0f;
         }
     }
-    __syncthreads();
-
-    // 3. aggregate V
-    float acc = 0.0f;
-    const size_t v_base = kv_head_idx * (size_t)HDIM;
-    for (size_t key_i = 0; key_i <= max_k_idx; ++key_i) {
-        const float wi = score_vec[key_i];
-        const size_t v_offset = (key_i * nkvhead) * (size_t)HDIM + v_base + tid;
-        const float  v_elem   = load_as_float(v + v_offset);
-        acc += wi * v_elem;
-    }
-
-    const size_t out_offset = (query_i * nhead + head_i) * (size_t)HDIM + tid;
-    store_from_float(atten_val + out_offset, acc);
+    
 }
 
 // 显式实例化
-template __global__ void naive_atten3d_hdim128_kernel<float>(
-    float*, const float*, const float*, const float*, float*, float,
+template __global__ void atten3d_hdim128_score_kernel<float>(
+    const float*, const float*, const float*, float*, float,
     size_t, size_t, size_t, size_t);
-template __global__ void naive_atten3d_hdim128_kernel<__half>(
-    __half*, const __half*, const __half*, const __half*, float*, float,
+
+template __global__ void atten3d_hdim128_score_kernel<__half>(
+    const __half*, const __half*, const __half*, float*, float,
     size_t, size_t, size_t, size_t);
-template __global__ void naive_atten3d_hdim128_kernel<__nv_bfloat16>(
-    __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*,
-    float*, float, size_t, size_t, size_t, size_t);
+
+template __global__ void atten3d_hdim128_score_kernel<__nv_bfloat16>(
+    const __nv_bfloat16*, const __nv_bfloat16*, const __nv_bfloat16*, float*, float,
+    size_t, size_t, size_t, size_t);
 
 } // namespace llaisys::ops::nvidia::kernels
