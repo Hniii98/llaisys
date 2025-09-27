@@ -23,7 +23,8 @@ target("llaisys-ops-nvidia")
 		add_cxflags("-fPIC", "-Wno-unknown-pragmas")
 	end
 
-	add_files("../src/ops/*/nvidia/*.cu")
+	add_files("../src/ops/*/nvidia/**.cu")
+
 	add_cugencodes("native")
 	
 	set_policy("build.cuda.devlink", true)
