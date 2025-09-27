@@ -33,17 +33,14 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
     if (d == 128) {
         // 走专用 kernel
         dim3 block(128), grid(static_cast<unsigned>(seq_len), static_cast<unsigned>(nhead));
-        atten3d_hdim128_score_kernel<T>
+        naive_atten3d_hdim128_kernel<T>
             <<<grid, block, 0, stream>>>(
+                reinterpret_cast<T*>(atten_val),
                 reinterpret_cast<const T*>(q),
                 reinterpret_cast<const T*>(k),
                 reinterpret_cast<const T*>(v),
                 score, scale, seq_len, nhead, total_len, nkvhead);
         
-        launch_atten3d_hdim128_vproj<T> (
-            reinterpret_cast<T*>(atten_val),
-            reinterpret_cast<const T*>(v),
-            score, seq_len, nhead, total_len, nkvhead, stream);
         
     } else {
         // 走通用 kernel

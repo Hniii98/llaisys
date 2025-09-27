@@ -102,19 +102,20 @@ __global__ void naive_atten3d_hdim128_kernel(
     }
     __syncthreads();
 
-    // 3. aggregate V
+    //3. aggregate V: 每个线程负责一个通道
     float acc = 0.0f;
-    const size_t v_base = kv_head_idx * (size_t)HDIM;
+    const size_t v_channel_offset = kv_head_idx * HDIM + tid; // 每个线程负责一个通道
     for (size_t key_i = 0; key_i <= max_k_idx; ++key_i) {
         const float wi = score_vec[key_i];
-        const size_t v_offset = (key_i * nkvhead) * (size_t)HDIM + v_base + tid;
-        const float  v_elem   = load_as_float(v + v_offset);
+        const size_t v_offset = (key_i * nkvhead) * HDIM + v_channel_offset;
+        const float  v_elem = load_as_float(v + v_offset);
         acc += wi * v_elem;
     }
 
-    const size_t out_offset = (query_i * nhead + head_i) * (size_t)HDIM + tid;
+    // 写回结果
+    const size_t out_offset = (query_i * nhead + head_i) * HDIM + tid;
     store_from_float(atten_val + out_offset, acc);
-}
+    }
 
 // 显式实例化
 template __global__ void naive_atten3d_hdim128_kernel<float>(
