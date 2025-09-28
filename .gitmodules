@@ -1,0 +1,3 @@
+[submodule "xmake/third_party/cudnn-frontend"]
+	path = xmake/third_party/cudnn-frontend
+	url = https://github.com/NVIDIA/cudnn-frontend.git
