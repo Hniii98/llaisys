@@ -117,7 +117,7 @@ __global__ void naive_atten3d_hdim128_kernel(
     store_from_float(atten_val + out_offset, acc);
     }
 
-// 显式实例化
+// 显式实例化，host 端要能找到一个“入口符号”（内核函数指针），这个符号必须在编译时就生成。
 template __global__ void naive_atten3d_hdim128_kernel<float>(
     float*, const float*, const float*, const float*, float*, float,
     size_t, size_t, size_t, size_t);
