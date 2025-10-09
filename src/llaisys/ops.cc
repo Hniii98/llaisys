@@ -34,9 +34,34 @@ __C {
     void llaisysROPE(llaisysTensor_t out, llaisysTensor_t in, llaisysTensor_t pos_ids, float theta) {
         llaisys::ops::rope(out->tensor, in->tensor, pos_ids->tensor, theta);
     }
-    void llaisysSelfAttention(llaisysTensor_t attn_val, llaisysTensor_t q, llaisysTensor_t k, llaisysTensor_t v, float scale) {
+
+    void llaisysSelfAttention(llaisysTensor_t attn_val,
+                          llaisysTensor_t q,
+                          llaisysTensor_t k,
+                          llaisysTensor_t v,
+                          float scale) noexcept {
+    try {
         llaisys::ops::self_attention(attn_val->tensor, q->tensor, k->tensor, v->tensor, scale);
+    } catch (const std::exception& e) {
+        // 捕获所有从std::exception派生的异常
+        fprintf(stderr,
+                "[ERROR] llaisysSelfAttention failed: %s\n"
+                "  attn_val=%p  q=%p  k=%p  v=%p  scale=%.3f\n",
+                e.what(), (void*)attn_val, (void*)q, (void*)k, (void*)v, scale);
+        fflush(stderr);
+        return;
+    } catch (...) {
+        // 捕获所有其他类型的异常
+        fprintf(stderr,
+                "[ERROR] llaisysSelfAttention: unknown exception\n"
+                "  attn_val=%p  q=%p  k=%p  v=%p  scale=%.3f\n",
+                (void*)attn_val, (void*)q, (void*)k, (void*)v, scale);
+        fflush(stderr);
+        return;
     }
+    }
+
+
     void llaisysSwiGLU(llaisysTensor_t out, llaisysTensor_t gate, llaisysTensor_t up) {
         llaisys::ops::swiglu(out->tensor, gate->tensor, up->tensor);
     }
