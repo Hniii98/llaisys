@@ -8,6 +8,9 @@
 #include <cuda_bf16.h>
 #include <thrust/functional.h>
 
+#include "atten3d_hdim128.cuh"
+
+
 namespace llaisys::ops::nvidia::kernels {
 
 // naive self attention implementation for qwen2 1.5B of 128 hidden dimension

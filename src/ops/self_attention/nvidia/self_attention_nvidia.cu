@@ -21,7 +21,7 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
     ASSERT(dv == d, "self attention kernel: d should be equal to dv.");
     auto stream = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
 
-        // ---- 1) Decode fast path ----
+    // ---- 1) Decode fast path ----
     if (seq_len == 1) {
         atten3d_hdim128_decode_kernel<T>(
             reinterpret_cast<T*>(atten_val),
@@ -68,12 +68,12 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
         }
     }
 
-    // ---- 3) 统一错误检查和同步 ----
+    // 错误检查和同步 ----
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaStreamSynchronize(stream));
 }
 
-// 仅对 float 做特化
+// 对 float 做特化
 template<>
 void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const std::byte *k, const std::byte *v,
                                  float scale, size_t seq_len, size_t nhead, size_t d,
@@ -82,7 +82,7 @@ void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const
     auto stream = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
 
     if (seq_len > 1) {
-        // 保留你现在的 prefill 逻辑（float 内核）
+        // prefill 
         auto score_storage = llaisys::core::context().runtime()
             .allocateDeviceStorage(sizeof(float) * seq_len * nhead * total_len);
         float *score = reinterpret_cast<float*>(score_storage->memory());
