@@ -5,9 +5,7 @@
 #include <cuda_bf16.h>
 #include <cudnn.h>
 #include <cudnn_frontend.h>
-
 #include "llaisys.h"
-#include "atten3d_hdim128_decode.cuh"
 
 namespace llaisys::ops::nvidia::kernels {
 
@@ -30,6 +28,19 @@ __global__ void naive_atten3d_hdim128_kernel(
     size_t nkvhead);
 
 
+template<typename T>
+void atten3d_hdim128_decode_kernel(
+	T *atten_val,  /* [seqlen, nhead, d=128] */
+    const T *q,    /* [seqlen, nhead, d=128] */
+    const T *k,    /* [total_len, nkvhead, d=128] */
+    const T *v,    /* [total_len, nkvhead, d=128] */
+	float scale,
+	size_t seq_len,
+	size_t nhead,
+	size_t total_len,
+	size_t nkvhead,
+	cudaStream_t stream_in);
+
 } // namespace llaisys::ops::nvidia::kernels
 
 
@@ -43,15 +54,12 @@ struct CudnnDType;
 template <>
 struct CudnnDType<__half> {
     static inline constexpr cudnn_frontend::DataType_t fe_type = cudnn_frontend::DataType_t::HALF;
-    static inline constexpr llaisysDataType_t llaisys_type = LLAISYS_DTYPE_F16;
 };
 
 // bfloat16
 template <>
 struct CudnnDType<__nv_bfloat16> {
     static inline constexpr cudnn_frontend::DataType_t fe_type = cudnn_frontend::DataType_t::BFLOAT16;
-    static inline constexpr llaisysDataType_t llaisys_type = LLAISYS_DTYPE_BF16;
-
 };
 
 }

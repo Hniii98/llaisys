@@ -1,7 +1,7 @@
 #pragma once
 
 #include "generic/atten3d_generic.cuh"
-#include "hdim128/atten3d_hdim128.cuh"
+#include "hdim128/atten3d_hdim.cuh"
 
 namespace llaisys::ops::nvidia::kernels {
 static __global__ void cast_fp32_to_fp16(const float* __restrict__ src, __half* __restrict__ dst, size_t n) {
