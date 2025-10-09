@@ -1,4 +1,3 @@
-// src/llaisys/models/qwen2.cc
 #include "llaisys/models/qwen2.h"
 #include "../llaisys_tensor.hpp"            
 #include "models/qwen2/qwen2_impl.hpp"        

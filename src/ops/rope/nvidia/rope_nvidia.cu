@@ -8,20 +8,6 @@
 
 namespace {
 
-// template<typename T>
-// __device__ inline float load_as_float(const T* p) {
-//     if constexpr (std::is_same_v<T, __half>)        return __half2float(*p);
-//     if constexpr (std::is_same_v<T, __nv_bfloat16>) return __bfloat162float(*p);
-//     return *p; // float
-// }
-
-// template<typename T>
-// __device__ inline void store_from_float(T* p, float v) {
-//     if constexpr (std::is_same_v<T, __half>)        { *p = __float2half(v); return; }
-//     if constexpr (std::is_same_v<T, __nv_bfloat16>) { *p = __float2bfloat16(v); return; }
-//     *p = v; // float
-// }
-
 // TODO: divide pow(theta,−2k/d) into exp((−2lntheta)/d​)*k)
 template<typename T>
 __global__ void rope_kernel(T *out, const T *in, const int64_t *pos_ids, float theta, 

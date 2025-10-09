@@ -30,7 +30,7 @@ __global__ void rmsnorm_kernel(T *out, const T *in, const T *weight, size_t n, s
         if constexpr (std::is_same_v<T, __nv_bfloat16>) v = __bfloat162float(in[index]);
         else if constexpr (std::is_same_v<T, __half>)   v = __half2float(in[index]);
         else if constexpr (std::is_same_v<T, float>)    v = in[index];
-        thread_sum_square += static_cast<double>(v) * static_cast<double>(v);
+        thread_sum_square += v * v;
     }
 
     float block_sum_square = BlockReduce(temp_storage).Sum(thread_sum_square); 
@@ -75,8 +75,8 @@ void rms_norm(std::byte *out, const std::byte *in, const std::byte *weight, llai
 			  size_t sequence_length, size_t embedding_dim, float eps) {
 	
     auto s = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
-	
-	dim3 block(256), grid(static_cast<unsigned>(sequence_length));
+	//BLOCK_SIZE must be equal to value in dim3  block(), otherwise behavior undefined.
+	dim3 block(256), grid(static_cast<unsigned>(sequence_length)); 
 
 	switch (type) {
 		case LLAISYS_DTYPE_F32:

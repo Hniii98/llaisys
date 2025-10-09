@@ -14,12 +14,13 @@ __global__ void embedding_kernel(T *out,
                                  const T *weight,
                                  size_t row_size,
                                  size_t list_length) {
+                                    
     for (size_t row = blockIdx.x; row < list_length; row += gridDim.x) {
-        size_t weight_index = static_cast<size_t>(index_list[row]);
+        size_t weight_index = static_cast<size_t>(index_list[row]); // indicate row number
         const T* weight_ptr = weight + (weight_index * row_size); 
         T *out_ptr = out + (row * row_size);
 
-        for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
+        for (int i = threadIdx.x; i < row_size; i += blockDim.x) { // iterate a row
             out_ptr[i] = weight_ptr[i];
         }
     }

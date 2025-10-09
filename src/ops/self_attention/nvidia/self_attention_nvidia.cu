@@ -21,7 +21,7 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
     ASSERT(dv == d, "self attention kernel: d should be equal to dv.");
     auto stream = static_cast<cudaStream_t>(llaisys::core::context().runtime().stream());
 
-    // ---- 1) Decode fast path ----
+    // Decode fast path 
     if (seq_len == 1) {
         atten3d_hdim128_decode_kernel<T>(
             reinterpret_cast<T*>(atten_val),
@@ -30,7 +30,7 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
             reinterpret_cast<const T*>(v),
             scale, seq_len, nhead, total_len, nkvhead, stream);
     }
-    // ---- 2) Prefill ----
+    // Prefill 
     else {
         // 公共 score 缓冲
         auto score_storage =
@@ -109,7 +109,6 @@ void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const
                 score, scale, seq_len, nhead, total_len, nkvhead, (int)d);
         }
         CHECK_CUDA(cudaGetLastError());
-        CHECK_CUDA(cudaStreamSynchronize(stream));
         return;
     }
 
@@ -167,8 +166,7 @@ void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const
         cast_fp16_to_fp32<<<grdQ, blk, 0, stream>>>(Oh, reinterpret_cast<float*>(atten_val), nO);
     }
 
-    CHECK_CUDA(cudaGetLastError());
-    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_CUDA(cudaPeekAtLastError());
 }
 
 

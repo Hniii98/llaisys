@@ -4,6 +4,7 @@
 
 namespace llaisys {
 
+// 返回一个新的 C 句柄（包装对象）；调用方需 tensorDestroy() 释放该句柄。
 inline llaisysTensor_t to_c_handle(const tensor_t& t) {
     if (!t) return nullptr;
     auto* wrap = new LlaisysTensor{};
