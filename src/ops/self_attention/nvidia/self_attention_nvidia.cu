@@ -68,8 +68,6 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
         }
     }
 
-    // 同步
-    CHECK_CUDA(cudaStreamSynchronize(stream));
 }
 
 // 对 float 做特化
@@ -164,7 +162,6 @@ void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const
         cast_fp16_to_fp32<<<grdQ, blk, 0, stream>>>(Oh, reinterpret_cast<float*>(atten_val), nO);
     }
 
-    CHECK_CUDA(cudaPeekAtLastError());
 }
 
 
