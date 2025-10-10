@@ -10,9 +10,11 @@
 #include <cstring>
 #include <vector>
 
+#include <chrono>
+
 namespace llaisys::models::qwen2 {
 
-// -------- 权重数组分配/释放（不变） --------
+//  权重数组分配/释放
 static void alloc_weight_arrays(LlaisysQwen2Weights& w, size_t L) {
     w.attn_norm_w = new llaisysTensor_t[L];
     w.attn_q_w    = new llaisysTensor_t[L];
@@ -64,7 +66,7 @@ static void free_all_weights_and_tensors(LlaisysQwen2Weights& w, size_t L) {
     free_weight_arrays_keep_tensors(w);
 }
 
-// -------- 小工具 --------
+//  helper
 template<typename T>
 static T read_scalar_from_tensor(const tensor_t& t) {
     T v{};
@@ -81,7 +83,7 @@ static inline size_t safe_dim(const tensor_t& t, size_t i) {
     return (i < s.size()) ? s[i] : 0;
 }
 
-// -------- Qwen2Impl --------
+//  Qwen2Impl 
 Qwen2Impl::Qwen2Impl(const LlaisysQwen2Meta& meta_,
                      llaisysDeviceType_t device_,
                      const int* device_ids_,
@@ -107,6 +109,7 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
     auto in_embed  = llaisys::borrow(weights.in_embed);
     auto out_embed = llaisys::borrow(weights.out_embed);
     auto out_norm  = llaisys::borrow(weights.out_norm_w);
+    auto dtype = meta.dtype;
 
     size_t V = safe_dim(in_embed, 0);
     size_t H = safe_dim(in_embed, 1);
@@ -130,7 +133,7 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
     // embedding
     auto indices = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
     indices->load(token_ids);
-    auto x = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+    auto x = Tensor::create({T, H}, dtype, dev_type, dev_id);
     ops::embedding(x, indices, in_embed);
 
     auto pos_ids = Tensor::create({T}, LLAISYS_DTYPE_I64, dev_type, dev_id);
@@ -163,7 +166,7 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
         }
 
         // LN
-        auto x_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto x_norm = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::rms_norm(x_norm, x, attn_norm, meta.epsilon);
 
         // Q/K/V (仅针对本块 T 个 token)
@@ -176,9 +179,9 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
             break;
         }
 
-        auto q2d = Tensor::create({T, (size_t)Qd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto k2d = Tensor::create({T, (size_t)Kd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto v2d = Tensor::create({T, (size_t)Vd}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto q2d = Tensor::create({T, (size_t)Qd}, dtype, dev_type, dev_id);
+        auto k2d = Tensor::create({T, (size_t)Kd}, dtype, dev_type, dev_id);
+        auto v2d = Tensor::create({T, (size_t)Vd}, dtype, dev_type, dev_id);
 
         ops::linear(q2d, x_norm, q_w, q_b);
         ops::linear(k2d, x_norm, k_w, k_b);
@@ -208,20 +211,20 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
 
         // 注意力：Q 只用本块，K/V 用全量
         auto attn3d = Tensor::create({T, (size_t)meta.nh, (size_t)meta.dh},
-                                     LLAISYS_DTYPE_F32, dev_type, dev_id);
+                                     dtype, dev_type, dev_id);
         float scale = (meta.dh > 0) ? (1.0f / std::sqrt(float(meta.dh))) : 1.0f;
         // 要求 ops::self_attention 支持 len_q != len_kv（大多数实现都支持）
         ops::self_attention(attn3d, q, k_all, v_all, scale);
 
         auto attn = attn3d->view({T, H});
-        auto o = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto o = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::linear(o, attn, o_w, nullptr);
 
-        auto x_res1 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto x_res1 = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::add(x_res1, x, o);
 
         // MLP
-        auto y_norm = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto y_norm = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::rms_norm(y_norm, x_res1, mlp_norm, meta.epsilon);
 
         size_t Id = safe_dim(gate_w, 0);
@@ -231,33 +234,33 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
             break;
         }
 
-        auto gate = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
-        auto up   = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto gate = Tensor::create({T, Id}, dtype, dev_type, dev_id);
+        auto up   = Tensor::create({T, Id}, dtype, dev_type, dev_id);
         ops::linear(gate, y_norm, gate_w, nullptr);
         ops::linear(up,   y_norm, up_w,   nullptr);
 
-        auto act  = Tensor::create({T, Id}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto act  = Tensor::create({T, Id}, dtype, dev_type, dev_id);
         ops::swiglu(act, gate, up);
 
-        auto down = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto down = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::linear(down, act, down_w, nullptr);
 
-        auto x_res2 = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+        auto x_res2 = Tensor::create({T, H}, dtype, dev_type, dev_id);
         ops::add(x_res2, x_res1, down);
         x = x_res2;
     }
 
     // 输出层（取最后一步）
-    auto x_last = Tensor::create({T, H}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+    auto x_last = Tensor::create({T, H}, dtype, dev_type, dev_id);
     ops::rms_norm(x_last, x, out_norm, meta.epsilon);
     auto last_h = x_last->slice(0, T - 1, T); // [1,H]
 
     size_t Vocab = safe_dim(out_embed, 0);
-    auto logits = Tensor::create({1, Vocab}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+    auto logits = Tensor::create({1, Vocab}, dtype, dev_type, dev_id);
     ops::linear(logits, last_h, out_embed, nullptr);
 
     auto max_idx = Tensor::create({1}, LLAISYS_DTYPE_I64, dev_type, dev_id);
-    auto max_val = Tensor::create({1}, LLAISYS_DTYPE_F32, dev_type, dev_id);
+    auto max_val = Tensor::create({1}, dtype, dev_type, dev_id);
     ops::argmax(max_idx, max_val, logits);
 
     last_logits_ = logits;
@@ -266,23 +269,41 @@ int64_t Qwen2Impl::forward(const int64_t* token_ids, size_t T, size_t pos_base) 
     return next_id;
 }
 
-// ============== 对外接口 ==============
+//  对外接口 
 int64_t Qwen2Impl::prefill(const int64_t* token_ids, size_t T) {
+  
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     // 覆盖上下文，清空缓存
     ctx_tokens_.assign(token_ids, token_ids + T);
     reset_cache();
     // prefill 一次性跑 T，并把 K/V 写入缓存（pos_base=0）
     int64_t next_id = forward(ctx_tokens_.data(), ctx_tokens_.size(), /*pos_base=*/0);
     // prefill 完成后，cache_len_ 已更新为 T
+    
+    // 结束计时并输出
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    std::cout << "[Prefill] Tokens: " << T << ", Time: " << duration.count() / 1000 << " ms " << std::endl;
+    
     return next_id;
 }
 
 int64_t Qwen2Impl::decode_one(int64_t token_id) {
+    // 开始计时
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     // 这一步 token 的绝对位置
     size_t pos = ctx_tokens_.size();
     ctx_tokens_.push_back(token_id);
     // 只算这 1 个 token（pos_base=pos），并把它的 K/V 追加到缓存
     int64_t next_id = forward(&ctx_tokens_.back(), /*T=*/1, /*pos_base=*/pos);
+    
+    // 结束计时并输出
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    std::cout << "[Decode] Position: " << pos << ", Time: " << duration.count() / 1000 << " ms " << std::endl;
+    
     return next_id;
 }
 
