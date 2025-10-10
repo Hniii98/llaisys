@@ -209,7 +209,6 @@ void execute_graph(
         fill_neg_inf<<<grid, block, 0, stream>>>(
             reinterpret_cast<float*>(cached_graph->bias_buf->memory()) + neg_inf_offset,
             neg_inf_count);
-        CHECK_CUDA(cudaGetLastError());
     }
 
     // 执行 cuDNN FE 图 

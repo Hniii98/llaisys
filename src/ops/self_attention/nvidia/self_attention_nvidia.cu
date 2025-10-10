@@ -68,8 +68,7 @@ void selfatten3d_dispatch(std::byte *atten_val, const std::byte *q, const std::b
         }
     }
 
-    // 错误检查和同步 ----
-    CHECK_CUDA(cudaGetLastError());
+    // 同步
     CHECK_CUDA(cudaStreamSynchronize(stream));
 }
 
@@ -108,7 +107,6 @@ void selfatten3d_dispatch<float>(std::byte *atten_val, const std::byte *q, const
                 reinterpret_cast<const float*>(v),
                 score, scale, seq_len, nhead, total_len, nkvhead, (int)d);
         }
-        CHECK_CUDA(cudaGetLastError());
         return;
     }
 
