@@ -63,6 +63,12 @@ void linear_(std::byte *out, // [m, n]  (row major)  /  [n, m] (col major)
     //   维度：m' = n,  n' = m,  k' = k
     //
     // opA/opB 是“数学转置标志”，用于纠正 cuBLAS 的列主序解释；不进行任何物理数据转置/拷贝。
+    auto compute_type =
+        std::is_same_v<T, __half>      ? CUBLAS_COMPUTE_32F_FAST_16F :
+        std::is_same_v<T, __nv_bfloat16> ? CUBLAS_COMPUTE_32F_FAST_16BF :
+        CUBLAS_COMPUTE_32F;
+
+
 
     CHECK_CUBLAS(cublasGemmEx(
         handle,
@@ -75,7 +81,7 @@ void linear_(std::byte *out, // [m, n]  (row major)  /  [n, m] (col major)
         reinterpret_cast<const T *>(in),     CType, static_cast<int>(k), // B: ldb = k
         &beta,
         reinterpret_cast<T *>(out),          CType, static_cast<int>(n), // C: ldc = n
-        CUBLAS_COMPUTE_32F,
+        compute_type,
         algo));
 
     if (bias) {
