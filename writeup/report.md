@@ -38,6 +38,7 @@
     - [5.1 Environment](#51-environment)
     - [5.2 PR 合并与修复记录](#52-pr-合并与修复记录)
     - [5.3 test\_infer运行结果截图](#53-test_infer运行结果截图)
+    - [5.3 已知问题](#53-已知问题)
 
 ---
 
@@ -617,3 +618,8 @@ cuDNN FE： https://github.com/Hniii98/cudnn-frontend-llaisys
 ![Process](./images/4.png)
 ![Process](./images/5.png)
 ![Process](./images/6.png)
+
+###  5.3 已知问题
+
+- 在cuDNN frontend使用的时候，如果遇到import torch，由于torch自带低版本的cuDNN backend可能导致库无法链接到正确dll文件从而报错找不到sdpa的定义，
+  最粗暴简单的解决办法就是将cuDNN/lib下的*.dll文件覆盖所用虚拟环境下torch/lib的*.dll即可解决。
