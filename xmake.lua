@@ -19,6 +19,8 @@ option_end()
 if has_config("nv-gpu") then
     
     add_defines("ENABLE_NVIDIA_API")
+    add_defines("_CRT_SECURE_NO_WARNINGS")
+
     add_links("cublasLt", "cublas", "cudnn")
     --  before = true 防止cudnn 自带的frontend影响编译
     add_includedirs("third_party/cudnn-frontend/include", {public = true,  before = true})

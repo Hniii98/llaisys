@@ -2,6 +2,7 @@
 #include "../../ops.hpp"
 #include "../../../device/nvidia/utils.cuh"
 
+
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -30,9 +31,10 @@ void linear_(std::byte *out, // [m, n]  (row major)  /  [n, m] (col major)
              size_t k,  // in_dim
              size_t n,  // out_dim (cols of out)
              cudaStream_t stream) {
-    cublasHandle_t handle;
-    CHECK_CUBLAS(cublasCreate(&handle));
-    CHECK_CUBLAS(cublasSetStream(handle, stream));
+
+    auto &runtime = llaisys::core::context().runtime();
+
+    auto handle = runtime.cublasHandle();
 
     const float alpha = 1.0f;
     const float beta  = 0.0f;
@@ -94,7 +96,6 @@ void linear_(std::byte *out, // [m, n]  (row major)  /  [n, m] (col major)
             static_cast<int>(m), static_cast<int>(n));
     }
 
-    CHECK_CUBLAS(cublasDestroy(handle));
 }
 
 

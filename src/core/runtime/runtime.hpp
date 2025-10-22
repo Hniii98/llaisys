@@ -4,6 +4,14 @@
 #include "../../device/runtime_api.hpp"
 #include "../allocator/allocator.hpp"
 
+
+#if defined(ENABLE_NVIDIA_API)
+#include "../../device/nvidia/utils.cuh"
+#include <cublas_v2.h>   // cuBLAS handle only when NVIDIA API is enabled
+//#include "../../device/nvidia/utils.cuh"
+#endif
+
+
 namespace llaisys::core {
 class Runtime {
 private:
@@ -16,6 +24,10 @@ private:
     void _deactivate();
     llaisysStream_t _stream;
     Runtime(llaisysDeviceType_t device_type, int device_id);
+
+#if defined(ENABLE_NVIDIA_API)
+    cublasHandle_t _cublas_handle;   // cuBLAS handle (only valid if ENABLE_NVIDIA_API)
+#endif
 
 public:
     friend class Context;
@@ -41,6 +53,9 @@ public:
     void freeStorage(Storage *storage);
 
     llaisysStream_t stream() const;
+#if defined(ENABLE_NVIDIA_API)
+    cublasHandle_t cublasHandle() const;
+#endif
     void synchronize() const;
 };
 } // namespace llaisys::core
