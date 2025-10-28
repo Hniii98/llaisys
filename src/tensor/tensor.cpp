@@ -243,19 +243,10 @@ tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
 }
 
 void Tensor::load(const void *src_) {
-    //get runtime device type
-    //std::cout << "Dest ptr: " << this->data() << ", Src ptr: " << src_ << std::endl;
-
-    auto device_type = core::context().runtime().deviceType();
-     size_t total_size = this->numel() * this->elementSize();
-    if (device_type != LLAISYS_DEVICE_CPU ) {
-        //host to device
-       core::context().runtime().api()->memcpy_sync(this->data(), src_, total_size, 
-            LLAISYS_MEMCPY_H2D); 
-    } else {
-        // host to host
-        std::memcpy(this->data(), src_, total_size);      
-    }
+    // get runtime device type
+    size_t total_size = this->numel() * this->elementSize();
+    core::context().runtime().api()->memcpy_sync(this->data(), src_, total_size, 
+        LLAISYS_MEMCPY_H2D); 
    
 }
 
