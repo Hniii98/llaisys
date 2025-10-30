@@ -20,7 +20,7 @@ void rms_norm_(T *out, const T *in, const T *weight, size_t sequence_length, siz
 			row_sum_square += val * val;
 		}
 		// caculate rms of line sequence_length.
-		float inv_rms = std::sqrt(row_sum_square / embedding_dim + eps);
+		float rms = std::sqrt(row_sum_square / embedding_dim + eps);
 
 
 		// normalize element and mutiply weight
@@ -34,7 +34,7 @@ void rms_norm_(T *out, const T *in, const T *weight, size_t sequence_length, siz
                 scale = static_cast<float>(weight[j]);
             }
 
-            float rms_normed = (val / inv_rms) * scale;
+            float rms_normed = (val / rms) * scale;
 
             if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
                 out[i * embedding_dim + j] = llaisys::utils::cast<T>(rms_normed);
