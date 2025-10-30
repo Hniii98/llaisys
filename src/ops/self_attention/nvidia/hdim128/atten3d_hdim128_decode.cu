@@ -314,8 +314,6 @@ void atten3d_hdim128_decode_kernel(
                      static_cast<size_t>(kv_len),
                      stream_in);
 
-    // 同步策略保留与你当前一致
-    CHECK_CUDA(cudaStreamSynchronize(stream_in));
 }
 
 // 显式实例化
